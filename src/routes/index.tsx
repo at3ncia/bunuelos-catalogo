@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Los Buñuelos Los Originales — Catálogo" },
-      { name: "description", content: "Buñuelos, comidas, bebidas y combos. Pide por WhatsApp." },
+      { name: "description", content: "🧡Kiosco los buñuelos los originales + de 10 años en el mercado" },
     ],
   }),
   component: CatalogPage,
