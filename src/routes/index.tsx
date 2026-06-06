@@ -114,7 +114,7 @@ function CatalogPage() {
       {/* Hero strip */}
       <section className="max-w-5xl mx-auto px-4 pt-6 pb-4">
         <h1 className="text-2xl sm:text-3xl font-display font-bold text-primary text-balance">
-          Crujientes, doraditos y recién hechos 🍩
+          Crujientes, doraditos y recién hechos 💙
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground mt-1">
           Elige tus favoritos y envía tu pedido directo por WhatsApp.
