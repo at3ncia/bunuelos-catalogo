@@ -155,7 +155,7 @@ function LoginScreen() {
           </Link>
         </form>
         <p className="text-[11px] text-muted-foreground mt-4 text-center">
-          Por defecto: <code>admin</code> / <code>bunuelos2025</code>
+          Solo personal autorizado 🤫</code>
         </p>
       </div>
     </div>
