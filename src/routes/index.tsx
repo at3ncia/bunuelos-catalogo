@@ -427,16 +427,16 @@ function CheckoutModal({
       .join("\n");
     const msg = `Hola! quisiera hacer un pedido:
 
-🔹Nombre completo: ${nombre}
+- Nombre completo: ${nombre}
 
-🔹Pedido detallado:
+- Pedido detallado:
 ${detalle}
 
-🔹Dirección + punto de referencia: ${direccion}
+- Dirección + punto de referencia: ${direccion}
 
-🔹Número de contacto: ${telefono}
+- Número de contacto: ${telefono}
 
-🔹Medio de pago: ${pago}
+- Medio de pago: ${pago}
 
 Total: ${formatCOP(subtotal)}`;
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
