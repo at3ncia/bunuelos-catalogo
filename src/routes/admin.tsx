@@ -129,11 +129,13 @@ function LoginScreen() {
     }
   };
 
+  const logoUrl = state.config.logo || logoAsset.url;
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-card rounded-2xl shadow-card border border-border p-6">
         <div className="flex flex-col items-center mb-4">
-          <img src={logoAsset.url} alt="Logo" className="h-16 w-auto mb-2" />
+          <img src={logoUrl} alt="Logo" className="h-16 w-auto mb-2" />
           <h1 className="font-display text-xl font-bold text-primary">Administración</h1>
           <p className="text-sm text-muted-foreground">Ingresa tus credenciales</p>
         </div>
