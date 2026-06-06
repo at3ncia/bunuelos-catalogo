@@ -161,8 +161,8 @@ function CatalogPage() {
 
       {/* Footer */}
       <footer className="mt-16 pb-8 text-center border-t border-border/40 pt-8 max-w-5xl mx-auto">
-        <Link to="/privacidad" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          Política de Privacidad
+        <Link to="/politica-de-privacidad-y-uso-de-datos" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+          Política de Privacidad y Uso de Datos
         </Link>
       </footer>
 

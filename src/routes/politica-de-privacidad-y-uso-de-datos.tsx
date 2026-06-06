@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
-export const Route = createFileRoute("/privacidad")({
+export const Route = createFileRoute("/politica-de-privacidad-y-uso-de-datos")({
   head: () => ({
-    meta: [{ title: "Política de Privacidad" }],
+    meta: [{ title: "Política de Privacidad y Uso de Datos" }],
   }),
   component: PrivacidadPage,
 });
