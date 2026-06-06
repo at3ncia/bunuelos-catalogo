@@ -155,7 +155,7 @@ function LoginScreen() {
           </Link>
         </form>
         <p className="text-[11px] text-muted-foreground mt-4 text-center">
-          Solo personal autorizado 🤫</code>
+          Solo personal autorizado 🤫
         </p>
       </div>
     </div>
