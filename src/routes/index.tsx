@@ -3,7 +3,8 @@ import { useMemo, useState } from "react";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
-import logoAsset from "@/assets/logo-bunuelos.png.asset.json";
+import { BUSINESS } from "@/business.config";
+import { createOrder } from "@/lib/orders";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +22,8 @@ import { ShoppingCart, Plus, Minus, Trash2, ImageOff, Send, Settings } from "luc
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Los Buñuelos Los Originales — Catálogo" },
-      { name: "description", content: "🧡Kiosco los buñuelos los originales + de 10 años en el mercado" },
+      { title: BUSINESS.seo.tituloCatalogo },
+      { name: "description", content: BUSINESS.seo.descripcionCatalogo },
     ],
   }),
   component: CatalogPage,
@@ -42,7 +43,7 @@ function CatalogPage() {
     [state.productos, activeCat],
   );
 
-  const logoUrl = state.config.logo || logoAsset.url;
+  const logoUrl = state.config.logo || BUSINESS.logoUrl;
 
   if (loading) {
     return (
@@ -439,6 +440,7 @@ ${detalle}
 - Medio de pago: ${pago}
 
 Total: ${formatCOP(subtotal)}`;
+    void createOrder({ nombre, telefono, direccion, pago, items, total: subtotal });
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
     onSent();
@@ -448,7 +450,7 @@ Total: ${formatCOP(subtotal)}`;
     setPago("Efectivo");
   };
 
-  const opciones = ["Efectivo", "Nequi", "Bancolombia", "Otro"];
+  const opciones = BUSINESS.mediosDePago;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

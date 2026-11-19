@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useAppState } from "@/lib/app-store";
 import { uid, type Product, type Category } from "@/lib/storage";
 import { formatCOP } from "@/lib/cart";
-import logoAsset from "@/assets/logo-bunuelos.png.asset.json";
+import { BUSINESS } from "@/business.config";
+import { listOrders, setOrderStatus, computeStats, type Order, type OrderStatus } from "@/lib/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,12 +35,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, LogOut, Store, Tag, ImageOff, ArrowLeft, X } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Store, Tag, ImageOff, ArrowLeft, X, Receipt, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Admin — Los Buñuelos" },
+      { title: `Admin — ${BUSINESS.nombreCorto}` },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -48,7 +49,7 @@ export const Route = createFileRoute("/admin")({
 
 function AdminPage() {
   const { state, loading, update } = useAppState();
-  const [tab, setTab] = useState<"productos" | "categorias" | "negocio">("productos");
+  const [tab, setTab] = useState<"pedidos" | "productos" | "categorias" | "negocio">("pedidos");
 
   if (loading) {
     return (
@@ -72,7 +73,7 @@ function AdminPage() {
           <Link to="/" className="text-muted-foreground hover:text-primary" aria-label="Volver">
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <img src={state.config.logo || logoAsset.url} alt="" className="h-9 w-auto" />
+          <img src={state.config.logo || BUSINESS.logoUrl} alt="" className="h-9 w-auto" />
           <div>
             <h1 className="font-display font-bold text-primary leading-none">Panel de administración</h1>
             <p className="text-xs text-muted-foreground">{state.config.nombre}</p>
@@ -88,6 +89,7 @@ function AdminPage() {
         </div>
         <div className="max-w-5xl mx-auto px-4 pb-2 flex gap-2 overflow-x-auto">
           {([
+            ["pedidos", "Pedidos", Receipt],
             ["productos", "Productos", Store],
             ["categorias", "Categorías", Tag],
             ["negocio", "Negocio", Store],
@@ -106,6 +108,7 @@ function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
+        {tab === "pedidos" && <OrdersTab />}
         {tab === "productos" && <ProductsTab />}
         {tab === "categorias" && <CategoriesTab />}
         {tab === "negocio" && <BusinessTab />}
@@ -129,7 +132,7 @@ function LoginScreen() {
     }
   };
 
-  const logoUrl = state.config.logo || logoAsset.url;
+  const logoUrl = state.config.logo || BUSINESS.logoUrl;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -159,6 +162,147 @@ function LoginScreen() {
         <p className="text-[11px] text-muted-foreground mt-4 text-center">
           Solo personal autorizado 🤫
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------- Pedidos -------------------- */
+
+const RANGOS = { hoy: "Hoy", "7d": "7 días", "30d": "30 días", todo: "Todo" } as const;
+type Rango = keyof typeof RANGOS;
+
+function desdeRango(r: Rango): Date | undefined {
+  const d = new Date();
+  if (r === "hoy") { d.setHours(0, 0, 0, 0); return d; }
+  if (r === "7d") return new Date(Date.now() - 7 * 864e5);
+  if (r === "30d") return new Date(Date.now() - 30 * 864e5);
+  return undefined;
+}
+
+function OrdersTab() {
+  const [rango, setRango] = useState<Rango>("7d");
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const cargar = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setOrders(await listOrders(desdeRango(rango)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [rango]);
+
+  useEffect(() => { void cargar(); }, [cargar]);
+
+  const cambiarEstado = async (id: string, estado: OrderStatus) => {
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, estado } : o)));
+    try { await setOrderStatus(id, estado); } catch { void cargar(); }
+  };
+
+  const stats = computeStats(orders);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-2">
+        {(Object.keys(RANGOS) as Rango[]).map((r) => (
+          <button
+            key={r}
+            onClick={() => setRango(r)}
+            className={`px-3 py-1.5 rounded-full text-sm border transition ${
+              rango === r ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-muted"
+            }`}
+          >
+            {RANGOS[r]}
+          </button>
+        ))}
+        <div className="flex-1" />
+        <Button variant="ghost" size="sm" onClick={() => void cargar()}>
+          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Actualizar
+        </Button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          No se pudieron cargar los pedidos ({error}). ¿Ya ejecutaste <code>supabase/migrations/20261119_pedidos.sql</code> en Supabase?
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          ["Ventas", formatCOP(stats.ventas)],
+          ["Pedidos", String(stats.pedidos)],
+          ["Ticket promedio", formatCOP(stats.ticketPromedio)],
+          ["Clientes que repiten", `${stats.clientesRecurrentes} / ${stats.clientesUnicos}`],
+        ].map(([k, v]) => (
+          <div key={k} className="bg-card border border-border rounded-2xl p-4">
+            <p className="text-xs text-muted-foreground">{k}</p>
+            <p className="font-display text-xl font-bold text-primary">{v}</p>
+          </div>
+        ))}
+      </div>
+
+      {stats.topProductos.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-4">
+          <h3 className="font-display font-bold mb-2">Más vendidos</h3>
+          <ol className="space-y-1 text-sm">
+            {stats.topProductos.map((p, i) => (
+              <li key={p.nombre} className="flex justify-between">
+                <span>{i + 1}. {p.nombre}</span>
+                <span className="text-muted-foreground">{p.cantidad} u · {formatCOP(p.ingresos)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {!loading && orders.length === 0 && !error && (
+          <p className="text-center text-muted-foreground py-8">Aún no hay pedidos en este rango.</p>
+        )}
+        {orders.map((o) => (
+          <div key={o.id} className={`bg-card border border-border rounded-2xl p-4 ${o.estado === "cancelado" ? "opacity-60" : ""}`}>
+            <div className="flex flex-wrap items-start gap-2 justify-between">
+              <div>
+                <p className="font-semibold">{o.cliente_nombre}</p>
+                <p className="text-xs text-muted-foreground">
+                  {new Date(o.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })} · {o.medio_pago}
+                </p>
+              </div>
+              <p className="font-display font-bold text-primary">{formatCOP(Number(o.total))}</p>
+            </div>
+            <ul className="text-sm mt-2 text-muted-foreground">
+              {o.items.map((i) => <li key={i.producto_id}>{i.cantidad}x {i.nombre}</li>)}
+            </ul>
+            <p className="text-sm mt-1">📍 {o.direccion}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <a
+                href={`https://wa.me/${o.cliente_telefono.replace(/\D/g, "").replace(/^(\d{10})$/, "57$1")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-full text-sm border border-border hover:bg-muted"
+              >
+                {o.cliente_telefono}
+              </a>
+              {(["nuevo", "entregado", "cancelado"] as const).map((e) => (
+                <button
+                  key={e}
+                  onClick={() => void cambiarEstado(o.id, e)}
+                  className={`px-3 py-1.5 rounded-full text-sm border capitalize transition ${
+                    o.estado === e ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-muted"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -531,7 +675,7 @@ function BusinessTab() {
         <Label>Logo personalizado (opcional)</Label>
         <div className="mt-1 flex items-center gap-3">
           <div className="h-16 w-32 rounded-lg bg-muted overflow-hidden flex items-center justify-center p-1">
-            <img src={logo || logoAsset.url} alt="" className="max-h-full max-w-full object-contain" />
+            <img src={logo || BUSINESS.logoUrl} alt="" className="max-h-full max-w-full object-contain" />
           </div>
           <div className="flex flex-col gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>

@@ -2,6 +2,7 @@
 // Si Supabase no está configurado, funciona localmente.
 
 import { supabase } from "./supabase";
+import { BUSINESS } from "@/business.config";
 
 export type Category = { id: string; nombre: string };
 
@@ -40,8 +41,8 @@ const DEFAULT_CATEGORIES: Category[] = [
 
 export const DEFAULT_STATE: AppState = {
   config: {
-    nombre: "Los Buñuelos Los Originales",
-    whatsapp: "573001234567",
+    nombre: BUSINESS.nombre,
+    whatsapp: BUSINESS.whatsapp,
     logo: "",
   },
   categorias: DEFAULT_CATEGORIES,

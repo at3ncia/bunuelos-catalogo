@@ -1,3 +1,4 @@
+import { BUSINESS } from "@/business.config";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
@@ -72,10 +73,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Los Buñuelos Los Originales — Pide en línea" },
-      { name: "description", content: "Pide buñuelos, comidas, bebidas y combos. Los Originales, directo a tu casa por WhatsApp." },
-      { property: "og:title", content: "Los Buñuelos Los Originales" },
-      { property: "og:description", content: "Catálogo de comida callejera. Pide fácil por WhatsApp." },
+      { title: BUSINESS.seo.tituloSitio },
+      { name: "description", content: BUSINESS.seo.descripcionSitio },
+      { property: "og:title", content: BUSINESS.nombre },
+      { property: "og:description", content: BUSINESS.seo.ogDescripcion },
       { property: "og:type", content: "website" },
     ],
     links: [

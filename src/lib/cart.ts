@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { Product } from "./storage";
+import { BUSINESS } from "@/business.config";
 
 export type CartItem = { product: Product; cantidad: number };
 
@@ -30,5 +31,5 @@ export function useCart() {
 }
 
 export function formatCOP(n: number) {
-  return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat(BUSINESS.moneda.locale, { style: "currency", currency: BUSINESS.moneda.currency, maximumFractionDigits: 0 }).format(n);
 }
