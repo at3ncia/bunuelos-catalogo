@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef } from "react";
 import { useAppState } from "@/lib/app-store";
 import { uid, type Product, type Category } from "@/lib/storage";
 import { formatCOP } from "@/lib/cart";
 import { BUSINESS } from "@/business.config";
-import { listOrders, setOrderStatus, computeStats, type Order, type OrderStatus } from "@/lib/orders";
+import { useAdminSession, signIn, signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,9 +35,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, LogOut, Store, Tag, ImageOff, ArrowLeft, X, Receipt, RefreshCw, Users, Truck } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Store, Tag, ImageOff, ArrowLeft, X, Users, Truck } from "lucide-react";
 import { DeliveryTab } from "@/components/admin/DeliveryTab";
 import { CustomersTab } from "@/components/admin/CustomersTab";
+import { ApexSettings } from "@/components/admin/ApexSettings";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -50,10 +51,11 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminPage() {
-  const { state, loading, update } = useAppState();
-  const [tab, setTab] = useState<"pedidos" | "clientes" | "envios" | "productos" | "categorias" | "negocio">("pedidos");
+  const { state, loading } = useAppState();
+  const { session, checking } = useAdminSession();
+  const [tab, setTab] = useState<"clientes" | "envios" | "productos" | "categorias" | "negocio">("clientes");
 
-  if (loading) {
+  if (loading || checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -64,7 +66,7 @@ function AdminPage() {
     );
   }
 
-  if (!state.adminSession) {
+  if (!session) {
     return <LoginScreen />;
   }
 
@@ -84,15 +86,14 @@ function AdminPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => update((s) => ({ ...s, adminSession: false }))}
+            onClick={() => void signOut()}
           >
             <LogOut className="h-4 w-4 mr-1" /> Salir
           </Button>
         </div>
         <div className="max-w-5xl mx-auto px-4 pb-2 flex gap-2 overflow-x-auto">
           {([
-            ["pedidos", "Pedidos", Receipt],
-            ["clientes", "Clientes", Users],
+            ["clientes", "Solicitudes", Users],
             ["envios", "Envíos", Truck],
             ["productos", "Productos", Store],
             ["categorias", "Categorías", Tag],
@@ -112,30 +113,33 @@ function AdminPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {tab === "pedidos" && <OrdersTab />}
         {tab === "clientes" && <CustomersTab />}
         {tab === "envios" && <DeliveryTab />}
         {tab === "productos" && <ProductsTab />}
         {tab === "categorias" && <CategoriesTab />}
-        {tab === "negocio" && <BusinessTab />}
+        {tab === "negocio" && (
+          <div className="space-y-10">
+            <BusinessTab />
+            <ApexSettings />
+          </div>
+        )}
       </main>
     </div>
   );
 }
 
 function LoginScreen() {
-  const { state, update } = useAppState();
+  const { state } = useAppState();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (user === state.adminAuth.user && pass === state.adminAuth.pass) {
-      update((s) => ({ ...s, adminSession: true }));
-    } else {
-      setError("Usuario o contraseña incorrectos");
-    }
+    setBusy(true);
+    setError((await signIn(user, pass)) ?? "");
+    setBusy(false);
   };
 
   const logoUrl = state.config.logo || BUSINESS.logoUrl;
@@ -150,16 +154,16 @@ function LoginScreen() {
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <Label htmlFor="u">Usuario</Label>
-            <Input id="u" value={user} onChange={(e) => setUser(e.target.value)} autoFocus />
+            <Label htmlFor="u">Correo</Label>
+            <Input id="u" type="email" autoComplete="username" value={user} onChange={(e) => setUser(e.target.value)} autoFocus />
           </div>
           <div>
             <Label htmlFor="p">Contraseña</Label>
-            <Input id="p" type="password" value={pass} onChange={(e) => setPass(e.target.value)} />
+            <Input id="p" type="password" autoComplete="current-password" value={pass} onChange={(e) => setPass(e.target.value)} />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full bg-gradient-brand text-brand-foreground" size="lg">
-            Entrar
+          <Button type="submit" disabled={busy} className="w-full bg-gradient-brand text-brand-foreground" size="lg">
+            {busy ? "Entrando…" : "Entrar"}
           </Button>
           <Link to="/" className="block text-center text-sm text-muted-foreground hover:text-primary">
             ← Volver al catálogo
@@ -168,147 +172,6 @@ function LoginScreen() {
         <p className="text-[11px] text-muted-foreground mt-4 text-center">
           Solo personal autorizado 🤫
         </p>
-      </div>
-    </div>
-  );
-}
-
-/* -------------------- Pedidos -------------------- */
-
-const RANGOS = { hoy: "Hoy", "7d": "7 días", "30d": "30 días", todo: "Todo" } as const;
-type Rango = keyof typeof RANGOS;
-
-function desdeRango(r: Rango): Date | undefined {
-  const d = new Date();
-  if (r === "hoy") { d.setHours(0, 0, 0, 0); return d; }
-  if (r === "7d") return new Date(Date.now() - 7 * 864e5);
-  if (r === "30d") return new Date(Date.now() - 30 * 864e5);
-  return undefined;
-}
-
-function OrdersTab() {
-  const [rango, setRango] = useState<Rango>("7d");
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const cargar = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      setOrders(await listOrders(desdeRango(rango)));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [rango]);
-
-  useEffect(() => { void cargar(); }, [cargar]);
-
-  const cambiarEstado = async (id: string, estado: OrderStatus) => {
-    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, estado } : o)));
-    try { await setOrderStatus(id, estado); } catch { void cargar(); }
-  };
-
-  const stats = computeStats(orders);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        {(Object.keys(RANGOS) as Rango[]).map((r) => (
-          <button
-            key={r}
-            onClick={() => setRango(r)}
-            className={`px-3 py-1.5 rounded-full text-sm border transition ${
-              rango === r ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-muted"
-            }`}
-          >
-            {RANGOS[r]}
-          </button>
-        ))}
-        <div className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={() => void cargar()}>
-          <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Actualizar
-        </Button>
-      </div>
-
-      {error && (
-        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
-          No se pudieron cargar los pedidos ({error}). ¿Ya ejecutaste <code>supabase/migrations/20261119_pedidos.sql</code> en Supabase?
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          ["Ventas", formatCOP(stats.ventas)],
-          ["Pedidos", String(stats.pedidos)],
-          ["Ticket promedio", formatCOP(stats.ticketPromedio)],
-          ["Clientes que repiten", `${stats.clientesRecurrentes} / ${stats.clientesUnicos}`],
-        ].map(([k, v]) => (
-          <div key={k} className="bg-card border border-border rounded-2xl p-4">
-            <p className="text-xs text-muted-foreground">{k}</p>
-            <p className="font-display text-xl font-bold text-primary">{v}</p>
-          </div>
-        ))}
-      </div>
-
-      {stats.topProductos.length > 0 && (
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <h3 className="font-display font-bold mb-2">Más vendidos</h3>
-          <ol className="space-y-1 text-sm">
-            {stats.topProductos.map((p, i) => (
-              <li key={p.nombre} className="flex justify-between">
-                <span>{i + 1}. {p.nombre}</span>
-                <span className="text-muted-foreground">{p.cantidad} u · {formatCOP(p.ingresos)}</span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {!loading && orders.length === 0 && !error && (
-          <p className="text-center text-muted-foreground py-8">Aún no hay pedidos en este rango.</p>
-        )}
-        {orders.map((o) => (
-          <div key={o.id} className={`bg-card border border-border rounded-2xl p-4 ${o.estado === "cancelado" ? "opacity-60" : ""}`}>
-            <div className="flex flex-wrap items-start gap-2 justify-between">
-              <div>
-                <p className="font-semibold">{o.cliente_nombre}</p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(o.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })} · {o.medio_pago}
-                </p>
-              </div>
-              <p className="font-display font-bold text-primary">{formatCOP(Number(o.total))}</p>
-            </div>
-            <ul className="text-sm mt-2 text-muted-foreground">
-              {o.items.map((i) => <li key={i.producto_id}>{i.cantidad}x {i.nombre}</li>)}
-            </ul>
-            <p className="text-sm mt-1">📍 {[o.barrio, o.ciudad].filter(Boolean).join(", ")}{o.barrio ? " — " : ""}{o.direccion}{Number(o.domicilio) > 0 ? ` · domicilio ${formatCOP(Number(o.domicilio))}` : ""}</p>
-            <div className="flex flex-wrap gap-2 mt-3">
-              <a
-                href={`https://wa.me/${o.cliente_telefono.replace(/\D/g, "").replace(/^(\d{10})$/, "57$1")}`}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-1.5 rounded-full text-sm border border-border hover:bg-muted"
-              >
-                {o.cliente_telefono}
-              </a>
-              {(["nuevo", "entregado", "cancelado"] as const).map((e) => (
-                <button
-                  key={e}
-                  onClick={() => void cambiarEstado(o.id, e)}
-                  className={`px-3 py-1.5 rounded-full text-sm border capitalize transition ${
-                    o.estado === e ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-muted"
-                  }`}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

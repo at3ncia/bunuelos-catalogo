@@ -5,7 +5,7 @@ import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
 import { BUSINESS } from "@/business.config";
 import { createOrder } from "@/lib/orders";
-import { useZonas, findZona, barriosDe, CIUDADES, type Ciudad } from "@/lib/delivery";
+import { useBarriosPublicos, CIUDADES, type Ciudad } from "@/lib/barrios-publicos";
 import {
   Dialog,
   DialogContent,
@@ -423,11 +423,7 @@ function CheckoutModal({
   const [pago, setPago] = useState("Efectivo");
   const [ciudad, setCiudad] = useState<Ciudad>("Barranquilla");
   const [barrio, setBarrio] = useState("");
-  const { zonas } = useZonas();
-  const zona = findZona(zonas, ciudad, barrio);
-  const domicilio = zona?.precio ?? 0;
-  const total = subtotal + domicilio;
-  const listaBarrios = useMemo(() => barriosDe(zonas, ciudad), [zonas, ciudad]);
+  const listaBarrios = useBarriosPublicos(ciudad);
   const valido = nombre.trim() && direccion.trim() && telefono.trim() && barrio.trim();
 
   const enviar = () => {
@@ -450,13 +446,8 @@ ${detalle}
 
 - Medio de pago: ${pago}
 
-Subtotal: ${formatCOP(subtotal)}
-Domicilio: ${zona ? formatCOP(domicilio) : "a confirmar"}
-Total: ${formatCOP(total)}`;
-    void createOrder({
-      nombre, telefono, direccion, pago, items, total,
-      ciudad, barrio: barrio.trim(), zonaId: zona?.id ?? null, domicilio,
-    });
+Total productos: ${formatCOP(subtotal)}`;
+    void createOrder({ nombre, telefono, direccion, pago, items, total: subtotal, ciudad, barrio: barrio.trim() });
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
     onSent();
@@ -512,11 +503,6 @@ Total: ${formatCOP(total)}`;
             <datalist id="barrios-list">
               {listaBarrios.map((b) => <option key={b} value={b} />)}
             </datalist>
-            {barrio.trim() && (
-              <p className={`text-xs mt-1 ${zona ? "text-muted-foreground" : "text-amber-600"}`}>
-                {zona ? `Domicilio: ${formatCOP(domicilio)}` : "Barrio fuera de la lista: el domicilio se confirma por WhatsApp."}
-              </p>
-            )}
           </div>
           <div>
             <Label htmlFor="dir">Dirección + punto de referencia</Label>
@@ -551,14 +537,8 @@ Total: ${formatCOP(total)}`;
               ))}
             </div>
           </div>
-          <div className="rounded-xl bg-muted/50 p-3 text-sm space-y-1">
-            <div className="flex justify-between"><span>Subtotal</span><span>{formatCOP(subtotal)}</span></div>
-            <div className="flex justify-between">
-              <span>Domicilio</span><span>{zona ? formatCOP(domicilio) : barrio.trim() ? "A confirmar" : "—"}</span>
-            </div>
-            <div className="flex justify-between font-bold text-primary">
-              <span>Total</span><span>{formatCOP(total)}</span>
-            </div>
+          <div className="rounded-xl bg-muted/50 p-3 text-sm flex justify-between font-bold text-primary">
+            <span>Total productos</span><span>{formatCOP(subtotal)}</span>
           </div>
           <Button
             onClick={enviar}

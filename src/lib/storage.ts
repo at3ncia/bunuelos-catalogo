@@ -26,8 +26,6 @@ export type AppState = {
   config: BusinessConfig;
   categorias: Category[];
   productos: Product[];
-  adminAuth: { user: string; pass: string };
-  adminSession: boolean;
 };
 
 // ─── Valores por defecto ──────────────────────────────────────────────────────
@@ -75,8 +73,6 @@ export const DEFAULT_STATE: AppState = {
       disponible: true,
     },
   ],
-  adminAuth: { user: "admin", pass: "bunuelos2025" },
-  adminSession: false,
 };
 
 // ─── Helpers localStorage (fallback) ─────────────────────────────────────────
@@ -115,7 +111,6 @@ export async function loadStateFromSupabase(): Promise<AppState> {
 
     const raw = configRes.data as {
       nombre: string; whatsapp: string; logo: string;
-      admin_user: string; admin_pass: string;
     };
 
     const categorias: Category[] = (catRes.data ?? []).map((c: { id: string; nombre: string }) => ({
@@ -140,8 +135,6 @@ export async function loadStateFromSupabase(): Promise<AppState> {
       config: { nombre: raw.nombre, whatsapp: raw.whatsapp, logo: raw.logo ?? "" },
       categorias,
       productos,
-      adminAuth: { user: raw.admin_user, pass: raw.admin_pass },
-      adminSession: false,
     };
 
     lsSave(state); // cache local
@@ -164,8 +157,6 @@ export async function saveStateToSupabase(state: AppState): Promise<void> {
       nombre: state.config.nombre,
       whatsapp: state.config.whatsapp,
       logo: state.config.logo,
-      admin_user: state.adminAuth.user,
-      admin_pass: state.adminAuth.pass,
     });
 
     // Sincronizar categorías: eliminar las que ya no están, insertar/actualizar nuevas

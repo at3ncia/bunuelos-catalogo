@@ -16,12 +16,19 @@ Los colores están en `src/styles.css` (variables `--primary`, `--gradient-brand
 
 ## 3. Publicar
 Conecta el repo a Netlify (`netlify.toml` ya viene incluido).
-Entra a `/admin`, **cambia la contraseña por defecto** y carga los productos.
+Entra a `/admin` con el usuario administrador y carga los productos.
 
 ## 4. Legal
 Completa los campos `[...]` en `src/routes/politica-de-privacidad-y-uso-de-datos.tsx`.
 
-## Pendiente antes de venderlo a terceros
-- El login del admin compara la contraseña en el navegador, y esa contraseña se puede leer
-  desde la tabla `config` con la anon key. Hay que migrarlo a Supabase Auth y cerrar las
-  políticas RLS de `pedidos` (ver los comentarios en la migración).
+## Administrador único
+El admin usa Supabase Auth y solo existe **un** usuario autorizado:
+1. Supabase → Authentication → Users → *Add user* (email + contraseña).
+2. Desactiva *Allow new users to sign up*.
+3. Pon ese email en `20261121_auth_deals_apex.sql` antes de ejecutarla.
+
+## Apex (CRM)
+En /admin → Negocio → *Conexión con Apex*, pega la URL del webhook y activa el envío.
+Cada solicitud marcada como ganada o perdida llega a Apex como un deal, con el pedido,
+el cliente (identificado por su teléfono), sus métricas históricas y sus notas.
+El envío lo hace Supabase (pg_net), así que la URL nunca llega al navegador.
