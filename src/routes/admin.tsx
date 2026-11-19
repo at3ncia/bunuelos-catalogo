@@ -35,7 +35,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, LogOut, Store, Tag, ImageOff, ArrowLeft, X, Receipt, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Store, Tag, ImageOff, ArrowLeft, X, Receipt, RefreshCw, Users, Truck } from "lucide-react";
+import { DeliveryTab } from "@/components/admin/DeliveryTab";
+import { CustomersTab } from "@/components/admin/CustomersTab";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -49,7 +51,7 @@ export const Route = createFileRoute("/admin")({
 
 function AdminPage() {
   const { state, loading, update } = useAppState();
-  const [tab, setTab] = useState<"pedidos" | "productos" | "categorias" | "negocio">("pedidos");
+  const [tab, setTab] = useState<"pedidos" | "clientes" | "envios" | "productos" | "categorias" | "negocio">("pedidos");
 
   if (loading) {
     return (
@@ -90,6 +92,8 @@ function AdminPage() {
         <div className="max-w-5xl mx-auto px-4 pb-2 flex gap-2 overflow-x-auto">
           {([
             ["pedidos", "Pedidos", Receipt],
+            ["clientes", "Clientes", Users],
+            ["envios", "Envíos", Truck],
             ["productos", "Productos", Store],
             ["categorias", "Categorías", Tag],
             ["negocio", "Negocio", Store],
@@ -109,6 +113,8 @@ function AdminPage() {
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {tab === "pedidos" && <OrdersTab />}
+        {tab === "clientes" && <CustomersTab />}
+        {tab === "envios" && <DeliveryTab />}
         {tab === "productos" && <ProductsTab />}
         {tab === "categorias" && <CategoriesTab />}
         {tab === "negocio" && <BusinessTab />}
@@ -279,7 +285,7 @@ function OrdersTab() {
             <ul className="text-sm mt-2 text-muted-foreground">
               {o.items.map((i) => <li key={i.producto_id}>{i.cantidad}x {i.nombre}</li>)}
             </ul>
-            <p className="text-sm mt-1">📍 {o.direccion}</p>
+            <p className="text-sm mt-1">📍 {[o.barrio, o.ciudad].filter(Boolean).join(", ")}{o.barrio ? " — " : ""}{o.direccion}{Number(o.domicilio) > 0 ? ` · domicilio ${formatCOP(Number(o.domicilio))}` : ""}</p>
             <div className="flex flex-wrap gap-2 mt-3">
               <a
                 href={`https://wa.me/${o.cliente_telefono.replace(/\D/g, "").replace(/^(\d{10})$/, "57$1")}`}

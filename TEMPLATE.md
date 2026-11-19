@@ -10,7 +10,8 @@ Los colores están en `src/styles.css` (variables `--primary`, `--gradient-brand
 
 ## 2. Supabase (base de datos propia para cada negocio)
 1. Crea un proyecto en supabase.com.
-2. En el SQL Editor crea las tablas `config`, `categorias` y `productos`, y luego ejecuta `supabase/migrations/20261119_pedidos.sql`.
+2. En el SQL Editor crea las tablas `config`, `categorias` y `productos`, y luego ejecuta, en orden, los archivos de `supabase/migrations/`.
+4. Zonas de domicilio: edita las ciudades, sedes y barrios sugeridos en `src/lib/delivery.ts` (o directo en /admin → Envíos).
 3. Pon `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en `.env` (local) o en las variables de entorno de Netlify.
 
 ## 3. Publicar

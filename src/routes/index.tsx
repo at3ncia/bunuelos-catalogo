@@ -5,6 +5,7 @@ import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
 import { BUSINESS } from "@/business.config";
 import { createOrder } from "@/lib/orders";
+import { useZonas, findZona, barriosDe, CIUDADES, type Ciudad } from "@/lib/delivery";
 import {
   Dialog,
   DialogContent,
@@ -420,9 +421,17 @@ function CheckoutModal({
   const [direccion, setDireccion] = useState("");
   const [telefono, setTelefono] = useState("");
   const [pago, setPago] = useState("Efectivo");
+  const [ciudad, setCiudad] = useState<Ciudad>("Barranquilla");
+  const [barrio, setBarrio] = useState("");
+  const { zonas } = useZonas();
+  const zona = findZona(zonas, ciudad, barrio);
+  const domicilio = zona?.precio ?? 0;
+  const total = subtotal + domicilio;
+  const listaBarrios = useMemo(() => barriosDe(zonas, ciudad), [zonas, ciudad]);
+  const valido = nombre.trim() && direccion.trim() && telefono.trim() && barrio.trim();
 
   const enviar = () => {
-    if (!nombre.trim() || !direccion.trim() || !telefono.trim()) return;
+    if (!valido) return;
     const detalle = items
       .map((i) => `   - ${i.cantidad}x ${i.product.nombre} (${formatCOP(i.product.precio * i.cantidad)})`)
       .join("\n");
@@ -433,20 +442,28 @@ function CheckoutModal({
 - Pedido detallado:
 ${detalle}
 
+- Ciudad / barrio: ${ciudad} - ${barrio}
+
 - Dirección + punto de referencia: ${direccion}
 
 - Número de contacto: ${telefono}
 
 - Medio de pago: ${pago}
 
-Total: ${formatCOP(subtotal)}`;
-    void createOrder({ nombre, telefono, direccion, pago, items, total: subtotal });
+Subtotal: ${formatCOP(subtotal)}
+Domicilio: ${zona ? formatCOP(domicilio) : "a confirmar"}
+Total: ${formatCOP(total)}`;
+    void createOrder({
+      nombre, telefono, direccion, pago, items, total,
+      ciudad, barrio: barrio.trim(), zonaId: zona?.id ?? null, domicilio,
+    });
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
     onSent();
     setNombre("");
     setDireccion("");
     setTelefono("");
+    setBarrio("");
     setPago("Efectivo");
   };
 
@@ -463,6 +480,43 @@ Total: ${formatCOP(subtotal)}`;
           <div>
             <Label htmlFor="nombre">Nombre completo</Label>
             <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} />
+          </div>
+          <div>
+            <Label>Ciudad</Label>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {CIUDADES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => { setCiudad(c); setBarrio(""); }}
+                  className={`px-3 py-2 rounded-full text-sm border transition ${
+                    ciudad === c ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border hover:bg-muted"
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="barrio">Barrio</Label>
+            <Input
+              id="barrio"
+              list="barrios-list"
+              value={barrio}
+              onChange={(e) => setBarrio(e.target.value)}
+              placeholder="Escribe y elige tu barrio"
+              maxLength={60}
+              autoComplete="off"
+            />
+            <datalist id="barrios-list">
+              {listaBarrios.map((b) => <option key={b} value={b} />)}
+            </datalist>
+            {barrio.trim() && (
+              <p className={`text-xs mt-1 ${zona ? "text-muted-foreground" : "text-amber-600"}`}>
+                {zona ? `Domicilio: ${formatCOP(domicilio)}` : "Barrio fuera de la lista: el domicilio se confirma por WhatsApp."}
+              </p>
+            )}
           </div>
           <div>
             <Label htmlFor="dir">Dirección + punto de referencia</Label>
@@ -497,9 +551,18 @@ Total: ${formatCOP(subtotal)}`;
               ))}
             </div>
           </div>
+          <div className="rounded-xl bg-muted/50 p-3 text-sm space-y-1">
+            <div className="flex justify-between"><span>Subtotal</span><span>{formatCOP(subtotal)}</span></div>
+            <div className="flex justify-between">
+              <span>Domicilio</span><span>{zona ? formatCOP(domicilio) : barrio.trim() ? "A confirmar" : "—"}</span>
+            </div>
+            <div className="flex justify-between font-bold text-primary">
+              <span>Total</span><span>{formatCOP(total)}</span>
+            </div>
+          </div>
           <Button
             onClick={enviar}
-            disabled={!nombre.trim() || !direccion.trim() || !telefono.trim()}
+            disabled={!valido}
             size="lg"
             className="w-full bg-gradient-brand text-brand-foreground"
           >

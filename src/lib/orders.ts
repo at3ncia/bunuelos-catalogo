@@ -15,11 +15,16 @@ export type Order = {
   items: OrderItem[];
   total: number;
   estado: OrderStatus;
+  ciudad?: string | null;
+  barrio?: string | null;
+  zona_id?: string | null;
+  domicilio?: number | null;
 };
 
 /** Registra el pedido. Nunca bloquea el envío por WhatsApp si falla. */
 export async function createOrder(input: {
   nombre: string; telefono: string; direccion: string; pago: string; items: CartItem[]; total: number;
+  ciudad: string; barrio: string; zonaId: string | null; domicilio: number;
 }): Promise<void> {
   try {
     const { error } = await supabase.from("pedidos").insert({
@@ -31,6 +36,10 @@ export async function createOrder(input: {
         producto_id: i.product.id, nombre: i.product.nombre, precio: i.product.precio, cantidad: i.cantidad,
       })),
       total: input.total,
+      ciudad: input.ciudad,
+      barrio: input.barrio,
+      zona_id: input.zonaId,
+      domicilio: input.domicilio,
     });
     if (error) console.warn("[Pedidos] No se pudo registrar:", error.message);
   } catch (err) {
@@ -74,4 +83,94 @@ export function computeStats(orders: Order[]) {
     clientesUnicos: clientes.size,
     clientesRecurrentes: [...clientes.values()].filter((n) => n > 1).length,
   };
+}
+
+// ─── Perfiles de cliente ─────────────────────────────────────────────────────
+
+export type CustomerSegment = "nuevo" | "recurrente" | "vip" | "en riesgo" | "perdido";
+
+export type CustomerProfile = {
+  telefono: string;
+  nombre: string;
+  ciudad: string;
+  barrio: string;
+  pedidos: number;
+  totalGastado: number;       // valor histórico (LTV) sin domicilios
+  ticketPromedio: number;
+  primerPedido: Date;
+  ultimoPedido: Date;
+  diasEntrePedidos: number | null; // frecuencia media
+  diasSinComprar: number;
+  segmento: CustomerSegment;
+  productoFavorito: string;
+  mensual: { mes: string; total: number; pedidos: number }[]; // últimos 6 meses
+  historial: Order[];
+};
+
+const DAY = 864e5;
+export const telKey = (t: string) => t.replace(/\D/g, "");
+
+export async function listAllOrders(): Promise<Order[]> {
+  const out: Order[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from("pedidos").select("*").order("created_at", { ascending: true }).range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...((data ?? []) as Order[]));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+export function buildCustomers(orders: Order[], now = new Date()): CustomerProfile[] {
+  const groups = new Map<string, Order[]>();
+  for (const o of orders) {
+    if (o.estado === "cancelado") continue;
+    const k = telKey(o.cliente_telefono);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(o);
+  }
+  const meses = [...Array(6)].map((_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
+
+  return [...groups.entries()].map(([tel, os]) => {
+    os.sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at));
+    const productos = (o: Order) => Number(o.total) - Number(o.domicilio ?? 0);
+    const total = os.reduce((a, o) => a + productos(o), 0);
+    const first = new Date(os[0].created_at);
+    const last = new Date(os[os.length - 1].created_at);
+    const freq = os.length > 1 ? (+last - +first) / DAY / (os.length - 1) : null;
+    const sin = Math.floor((+now - +last) / DAY);
+    const fav = new Map<string, number>();
+    os.forEach((o) => o.items.forEach((i) => fav.set(i.nombre, (fav.get(i.nombre) ?? 0) + i.cantidad)));
+    const mensual = meses.map((mes) => {
+      const delMes = os.filter((o) => o.created_at.slice(0, 7) === mes);
+      return { mes, total: delMes.reduce((a, o) => a + productos(o), 0), pedidos: delMes.length };
+    });
+    // Segmentación simple tipo RFM
+    const esperado = freq ? Math.max(freq * 2, 14) : 30;
+    let segmento: CustomerSegment =
+      sin > 90 ? "perdido" : sin > esperado ? "en riesgo" : os.length >= 5 ? "vip" : os.length >= 2 ? "recurrente" : "nuevo";
+    if (segmento === "vip" && sin > esperado) segmento = "en riesgo";
+    const ult = os[os.length - 1];
+    return {
+      telefono: tel,
+      nombre: ult.cliente_nombre,
+      ciudad: ult.ciudad ?? "",
+      barrio: ult.barrio ?? "",
+      pedidos: os.length,
+      totalGastado: total,
+      ticketPromedio: total / os.length,
+      primerPedido: first,
+      ultimoPedido: last,
+      diasEntrePedidos: freq,
+      diasSinComprar: sin,
+      segmento,
+      productoFavorito: [...fav.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "",
+      mensual,
+      historial: [...os].reverse(),
+    };
+  }).sort((a, b) => b.totalGastado - a.totalGastado);
 }
