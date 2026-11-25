@@ -122,3 +122,29 @@
   .bg-gradient-brand { background-image: var(--gradient-brand); }
   .text-balance { text-wrap: balance; }
 }
+
+/* Botón dorado con destello blanco cada 4 s */
+@keyframes destello {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  30%, 100% { transform: translateX(350%) skewX(-20deg); }
+}
+.btn-dorado {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f9e08b 0%, #e0b13a 45%, #c8921c 70%, #f3cf63 100%);
+  color: #3a2706;
+}
+.btn-dorado::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  animation: destello 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-dorado::after { animation: none; display: none; }
+}

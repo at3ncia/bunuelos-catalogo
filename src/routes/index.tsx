@@ -4,7 +4,7 @@ import { listarSedes, disponibilidadSede, type Sede } from "@/lib/sedes";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
-import logoAsset from "@/assets/logo-bunuelos.png.asset.json";
+import { LOGO_URL } from "@/lib/brand";
 import {
   Dialog,
   DialogContent,
@@ -81,7 +81,7 @@ function CatalogPage() {
     [state.productos, activeCat, dispSede],
   );
 
-  const logoUrl = state.config.logo || logoAsset.url;
+  const logoUrl = state.config.logo || LOGO_URL;
 
   if (loading) {
     return (
