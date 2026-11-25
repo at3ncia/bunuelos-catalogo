@@ -6,7 +6,9 @@ import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
 import { LOGO_URL, LOGO_OSCURO_URL, MASCOTA_URL, AZUL_MARCA, FONDO_MANCHAS } from "@/lib/brand";
-import { FotoProducto, colorCategoria, textoCategoria } from "@/components/foto-producto";
+import { FotoProducto, colorCategoria, textoSobre } from "@/components/foto-producto";
+import { estadoDomicilios, etiquetaDias, etiquetaFranjas, visibleHoy } from "@/lib/ajustes";
+import { Clock, RefreshCw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +35,17 @@ export const Route = createFileRoute("/")({
 });
 
 function CatalogPage() {
-  const { state, loading } = useAppState();
+  const { state, loading, recargar } = useAppState();
+  const ajustes = state.config.ajustes;
+  const colorDe = (categoriaId: string) => colorCategoria(state.categorias, categoriaId);
+
+  // El estado del horario se recalcula cada minuto (abre/cierra sin recargar)
+  const [ahora, setAhora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAhora(new Date()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const horario = estadoDomicilios(ajustes.horario_domicilios, ahora);
   const cart = useCart();
   const [activeCat, setActiveCat] = useState<string>("todos");
   const [selected, setSelected] = useState<Product | null>(null);
@@ -111,10 +123,11 @@ function CatalogPage() {
       state.productos.filter(
         (p) =>
           p.disponible &&
+          visibleHoy(p.dias, ahora) &&
           (dispSede[p.id] ?? true) &&
           (activeCat === "todos" || p.categoriaId === activeCat),
       ),
-    [state.productos, activeCat, dispSede],
+    [state.productos, activeCat, dispSede, ahora.getDate()],
   );
 
 
@@ -179,6 +192,7 @@ function CatalogPage() {
                 </button>
               </SheetTrigger>
               <CartSheet
+                colorDe={colorDe}
                 items={cart.items}
                 subtotal={cart.subtotal}
                 setQty={cart.setQty}
@@ -192,10 +206,10 @@ function CatalogPage() {
           </div>
 
           <h1 className="mt-5 text-3xl sm:text-4xl font-display font-bold text-balance leading-tight">
-            Crujientes, doraditos y recién hechos
+            {ajustes.titulo}
           </h1>
           <p className="text-sm sm:text-base text-white/80 mt-1">
-            Elige tus favoritos y envía tu pedido directo por WhatsApp.
+            {ajustes.subtitulo}
           </p>
 
           {sedeActual && (
@@ -228,10 +242,41 @@ function CatalogPage() {
       </nav>
 
       <main className="max-w-5xl mx-auto px-4 pt-5">
+        {!horario.abierto && (
+          <div role="status" className="mb-5 flex items-start gap-3 rounded-2xl bg-[#FDF1E6] border border-[#F3C9A0] px-4 py-3 text-sm text-[#7A3B05]">
+            <Clock className="h-5 w-5 shrink-0 mt-0.5" />
+            <p>
+              <strong>Domicilios cerrados en este momento.</strong>{" "}
+              {horario.abre
+                ? `Abrimos ${horario.abre.cuando} a las ${horario.abre.hora}${horario.abre.hora.endsWith(".") ? "" : "."} Puedes enviar tu pedido y te respondemos al abrir.`
+                : "Puedes enviar tu pedido y te respondemos apenas abramos."}
+            </p>
+          </div>
+        )}
+        {state.fuente === "copia" && (
+          <p className="mb-5 text-xs text-muted-foreground flex items-center gap-2">
+            Mostrando el último menú guardado; puede no estar al día.
+            <button onClick={() => recargar()} className="inline-flex items-center gap-1 font-semibold text-primary">
+              <RefreshCw className="h-3.5 w-3.5" /> Reintentar
+            </button>
+          </p>
+        )}
         {visibles.length === 0 ? (
           <div className="text-center py-20">
             <img src={MASCOTA_URL} alt="" className="h-20 w-auto mx-auto opacity-60" />
-            <p className="mt-3 text-muted-foreground">Por ahora no hay productos disponibles aquí.</p>
+            <p className="mt-3 text-muted-foreground">
+              {state.fuente === "vacio"
+                ? "No pudimos cargar el menú. Revisa tu conexión."
+                : "Por ahora no hay productos disponibles aquí."}
+            </p>
+            {state.fuente === "vacio" && (
+              <button
+                onClick={() => recargar()}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-2.5 font-semibold"
+              >
+                <RefreshCw className="h-4 w-4" /> Reintentar
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-8">
@@ -242,8 +287,8 @@ function CatalogPage() {
                     id={`sec-${g.id}`}
                     className="mb-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 font-display font-bold shadow-soft"
                     style={{
-                      backgroundColor: g.id === "__otros" ? AZUL_MARCA : colorCategoria(g.id),
-                      color: g.id === "__otros" ? "#fff" : textoCategoria(g.id),
+                      backgroundColor: g.id === "__otros" ? AZUL_MARCA : colorDe(g.id),
+                      color: g.id === "__otros" ? "#fff" : textoSobre(colorDe(g.id)),
                     }}
                   >
                     {g.nombre}
@@ -252,7 +297,7 @@ function CatalogPage() {
                 )}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                   {g.items.map((p) => (
-                    <ProductCard key={p.id} product={p} onOpen={() => setSelected(p)} onAdd={() => cart.add(p, 1)} />
+                    <ProductCard key={p.id} product={p} color={colorDe(p.categoriaId)} onOpen={() => setSelected(p)} onAdd={() => cart.add(p, 1)} />
                   ))}
                 </div>
               </section>
@@ -292,6 +337,7 @@ function CatalogPage() {
 
       <ProductModal
         product={selected}
+        color={selected ? colorDe(selected.categoriaId) : ""}
         onClose={() => setSelected(null)}
         onAdd={(qty) => {
           if (selected) cart.add(selected, qty);
@@ -306,6 +352,7 @@ function CatalogPage() {
         subtotal={cart.subtotal}
         whatsapp={whatsappPedido}
         lugar={lugarPedido}
+        mediosPago={ajustes.medios_pago}
         onSent={() => {
           cart.clear();
           setCheckoutOpen(false);
@@ -321,25 +368,23 @@ function CatalogPage() {
           <div>
             <img src={LOGO_OSCURO_URL} alt={state.config.nombre} className="h-14 w-auto" />
             <a
-              href="https://www.instagram.com/kiosko_los_bunuelos/"
+              href={`https://www.instagram.com/${ajustes.instagram}/`}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white/90 hover:text-white"
             >
-              <Instagram className="h-4 w-4" /> @kiosko_los_bunuelos
+              <Instagram className="h-4 w-4" /> @{ajustes.instagram}
             </a>
           </div>
           <div>
             <h2 className="font-display font-bold text-lg">Horario de domicilios</h2>
             <dl className="mt-3 space-y-3 text-sm">
-              <div>
-                <dt className="font-semibold text-[#F3B15A]">Lunes a sábado</dt>
-                <dd className="text-white/85">6:00 a. m. – 1:00 p. m. y 2:00 – 7:00 p. m.</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-[#F3B15A]">Domingos y festivos</dt>
-                <dd className="text-white/85">6:00 a. m. – 1:00 p. m.</dd>
-              </div>
+              {ajustes.horario_domicilios.map((r, i) => (
+                <div key={i}>
+                  <dt className="font-semibold text-[#F3B15A]">{etiquetaDias(r.dias)}</dt>
+                  <dd className="text-white/85">{r.franjas.length ? etiquetaFranjas(r.franjas) : "Cerrado"}</dd>
+                </div>
+              ))}
             </dl>
           </div>
         </div>
@@ -381,17 +426,19 @@ function CategoryPill({
 
 function ProductCard({
   product,
+  color,
   onOpen,
   onAdd,
 }: {
   product: Product;
+  color: string;
   onOpen: () => void;
   onAdd: () => void;
 }) {
   return (
     <div className="group relative bg-card rounded-2xl overflow-hidden shadow-card border border-border/60 hover:-translate-y-0.5 transition flex flex-col">
       <button onClick={onOpen} className="block w-full aspect-[4/3] overflow-hidden" aria-label={`Ver ${product.nombre}`}>
-        <FotoProducto product={product} className="group-hover:scale-105 transition duration-300" />
+        <FotoProducto product={product} color={color} className="group-hover:scale-105 transition duration-300" />
       </button>
       <button onClick={onOpen} className="flex-1 text-left p-3 pb-14">
         <h3 className="font-display font-bold text-sm sm:text-base leading-tight line-clamp-2 text-foreground">
@@ -417,10 +464,12 @@ function ProductCard({
 
 function ProductModal({
   product,
+  color,
   onClose,
   onAdd,
 }: {
   product: Product | null;
+  color: string;
   onClose: () => void;
   onAdd: (qty: number) => void;
 }) {
@@ -439,7 +488,7 @@ function ProductModal({
         {product && (
           <>
             <div className="aspect-[4/3]">
-              <FotoProducto product={product} mascota="w-[30%]" />
+              <FotoProducto product={product} color={color} mascota="w-[30%]" />
             </div>
             <div className="p-5">
               <DialogHeader>
@@ -487,12 +536,14 @@ function ProductModal({
 }
 
 function CartSheet({
+  colorDe,
   items,
   subtotal,
   setQty,
   remove,
   onCheckout,
 }: {
+  colorDe: (categoriaId: string) => string;
   items: ReturnType<typeof useCart>["items"];
   subtotal: number;
   setQty: (id: string, q: number) => void;
@@ -514,7 +565,7 @@ function CartSheet({
           items.map((i) => (
             <div key={i.product.id} className="flex gap-3 bg-muted/50 rounded-xl p-2">
               <div className="h-16 w-16 rounded-lg overflow-hidden flex-shrink-0">
-                <FotoProducto product={i.product} conNombre={false} mascota="w-3/4" />
+                <FotoProducto product={i.product} color={colorDe(i.product.categoriaId)} conNombre={false} mascota="w-3/4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm line-clamp-1">{i.product.nombre}</p>
@@ -569,6 +620,7 @@ function CheckoutModal({
   subtotal,
   whatsapp,
   lugar,
+  mediosPago,
   onSent,
 }: {
   open: boolean;
@@ -577,12 +629,13 @@ function CheckoutModal({
   subtotal: number;
   whatsapp: string;
   lugar: string;
+  mediosPago: string[];
   onSent: () => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [direccion, setDireccion] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [pago, setPago] = useState("Efectivo");
+  const [pago, setPago] = useState(mediosPago[0] ?? "Efectivo");
 
   const enviar = () => {
     if (!nombre.trim() || !direccion.trim() || !telefono.trim()) return;
@@ -609,10 +662,10 @@ Total: ${formatCOP(subtotal)}`;
     setNombre("");
     setDireccion("");
     setTelefono("");
-    setPago("Efectivo");
+    setPago(mediosPago[0] ?? "Efectivo");
   };
 
-  const opciones = ["Efectivo", "Nequi", "Bancolombia", "Otro"];
+  const opciones = mediosPago;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

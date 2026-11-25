@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
-import { loadStateFromSupabase, saveStateToSupabase, DEFAULT_STATE, type AppState } from "./storage";
+import { loadStateFromSupabase, DEFAULT_STATE, type AppState } from "./storage";
 
-// Cache compartida entre todos los componentes que usen el hook
+// Cache compartida entre los componentes que usen el hook (una sola carga por visita)
 let memoryState: AppState | null = null;
 let loadPromise: Promise<AppState> | null = null;
 const listeners = new Set<(s: AppState) => void>();
@@ -11,12 +11,10 @@ function notify(s: AppState) {
   listeners.forEach((l) => l(s));
 }
 
-// Carga los datos de Supabase una sola vez (singleton)
-function ensureLoaded(): Promise<AppState> {
-  if (memoryState) return Promise.resolve(memoryState);
-  if (!loadPromise) {
+function ensureLoaded(forzar = false): Promise<AppState> {
+  if (memoryState && !forzar) return Promise.resolve(memoryState);
+  if (!loadPromise || forzar) {
     loadPromise = loadStateFromSupabase().then((s) => {
-      memoryState = s;
       notify(s);
       return s;
     });
@@ -29,19 +27,14 @@ export function useAppState() {
   const [loading, setLoading] = useState(!memoryState);
 
   useEffect(() => {
-    // Si ya hay datos en memoria, usarlos de inmediato
     if (memoryState) {
       setState(memoryState);
       setLoading(false);
     }
-
-    // Cargar de Supabase (o esperar la carga en curso)
     ensureLoaded().then((s) => {
       setState(s);
       setLoading(false);
     });
-
-    // Suscribirse a cambios locales (del mismo tab)
     const listener = (s: AppState) => setState(s);
     listeners.add(listener);
     return () => {
@@ -49,14 +42,10 @@ export function useAppState() {
     };
   }, []);
 
-  const update = useCallback((updater: (s: AppState) => AppState) => {
-    const current = memoryState ?? DEFAULT_STATE;
-    const next = updater(current);
-    // Actualización optimista inmediata en la UI
-    notify(next);
-    // Guardar en Supabase en segundo plano
-    saveStateToSupabase(next);
+  const recargar = useCallback(() => {
+    setLoading(true);
+    return ensureLoaded(true).finally(() => setLoading(false));
   }, []);
 
-  return { state, loading, update };
+  return { state, loading, recargar };
 }

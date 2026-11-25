@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { Category, Product } from "@/lib/storage";
+import { filaAProducto, filaACategoria, type Category, type Product } from "@/lib/storage";
 import { formatCOP } from "@/lib/cart";
 import {
   listarSedes,
@@ -277,6 +277,12 @@ function LoginSede({ sedes, onOk }: { sedes: Sede[]; onOk: (s: Sede, clave: stri
           {cargando ? "Verificando…" : "Ingresar"}
         </button>
       </Tarjeta>
+      <p className="text-center text-xs text-muted-foreground">
+        ¿Eres el dueño?{" "}
+        <Link to="/admin" className="font-semibold text-primary underline">
+          Panel del negocio
+        </Link>
+      </p>
     </form>
   );
 }
@@ -301,22 +307,12 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
     (async () => {
       try {
         const [prods, cats, d] = await Promise.all([
-          supabase.from("productos").select("*").order("nombre"),
+          supabase.from("productos").select("*").order("orden").order("nombre"),
           supabase.from("categorias").select("*").order("orden"),
           disponibilidadSede(sede.id),
         ]);
-        setProductos(
-          (prods.data ?? []).map((p: any) => ({
-            id: p.id,
-            nombre: p.nombre,
-            descripcion: p.descripcion ?? "",
-            precio: p.precio,
-            categoriaId: p.categoria_id,
-            foto: p.foto ?? "",
-            disponible: p.disponible,
-          })),
-        );
-        setCategorias((cats.data ?? []).map((c: any) => ({ id: c.id, nombre: c.nombre })));
+        setProductos((prods.data ?? []).map(filaAProducto));
+        setCategorias((cats.data ?? []).map(filaACategoria));
         setDisp(d);
       } catch (e: any) {
         setError(e?.message ?? "No se pudo cargar el menú");
