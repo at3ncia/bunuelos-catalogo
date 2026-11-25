@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import { AZUL_MARCA, FONDO_MANCHAS, LOGO_OSCURO_URL } from "@/lib/brand";
 
 export const Route = createFileRoute("/politica-de-privacidad-y-uso-de-datos")({
   head: () => ({
@@ -11,14 +12,18 @@ export const Route = createFileRoute("/politica-de-privacidad-y-uso-de-datos")({
 function PrivacidadPage() {
   return (
     <div className="min-h-screen bg-background pb-20">
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-background/85 border-b border-border/60">
-        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center">
+      <header
+        className="text-white"
+        style={{ backgroundColor: AZUL_MARCA, backgroundImage: FONDO_MANCHAS, backgroundSize: "340px 340px" }}
+      >
+        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
           <Link
             to="/"
-            className="flex items-center gap-2 text-muted-foreground hover:text-primary transition font-medium text-sm"
+            className="flex items-center gap-2 text-white/85 hover:text-white transition font-medium text-sm"
           >
-            <ArrowLeft className="h-4 w-4" /> Volver al inicio
+            <ArrowLeft className="h-4 w-4" /> Volver al menú
           </Link>
+          <img src={LOGO_OSCURO_URL} alt="Los Buñuelos Los Originales" className="h-10 w-auto" />
         </div>
       </header>
 

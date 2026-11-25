@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, listarPuntos, PUNTOS_RESPALDO, type Sede, type PuntoPedido } from "@/lib/sedes";
-import { MapPin, ChevronDown } from "lucide-react";
+import { MapPin, ChevronDown, Instagram } from "lucide-react";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
-import { LOGO_URL } from "@/lib/brand";
+import { LOGO_URL, LOGO_OSCURO_URL, MASCOTA_URL, AZUL_MARCA, FONDO_MANCHAS } from "@/lib/brand";
+import { FotoProducto, colorCategoria, textoCategoria } from "@/components/foto-producto";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, Plus, Minus, Trash2, ImageOff, Settings } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Trash2, Settings } from "lucide-react";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 
 export const Route = createFileRoute("/")({
@@ -116,76 +117,103 @@ function CatalogPage() {
     [state.productos, activeCat, dispSede],
   );
 
-  const logoUrl = state.config.logo || LOGO_URL;
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-          <p className="text-muted-foreground text-sm">Cargando catálogo…</p>
+          <img src={MASCOTA_URL} alt="" className="h-24 w-auto animate-bounce" />
+          <p className="text-muted-foreground text-sm">Calentando el aceite…</p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen pb-32">
-      {/* Header */}
-      <header className="sticky top-0 z-30 backdrop-blur-md bg-background/85 border-b border-border/60">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <img src={logoUrl} alt={state.config.nombre} className="h-12 sm:h-14 w-auto" />
-          <div className="flex-1" />
-          <Link
-            to="/sede"
-            aria-label="Admin"
-            className="p-2 rounded-full text-muted-foreground hover:text-primary hover:bg-muted transition"
-          >
-            <Settings className="h-5 w-5" />
-          </Link>
-          <Sheet open={cartOpen} onOpenChange={setCartOpen}>
-            <SheetTrigger asChild>
-              <button
-                className="relative inline-flex items-center justify-center h-11 w-11 rounded-full bg-primary text-primary-foreground shadow-card hover:scale-105 transition"
-                aria-label="Carrito"
-              >
-                <ShoppingCart className="h-5 w-5" />
-                {cart.count > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-secondary text-secondary-foreground text-[11px] font-bold flex items-center justify-center">
-                    {cart.count}
-                  </span>
-                )}
-              </button>
-            </SheetTrigger>
-            <CartSheet
-              items={cart.items}
-              subtotal={cart.subtotal}
-              setQty={cart.setQty}
-              remove={cart.remove}
-              onCheckout={() => {
-                setCartOpen(false);
-                setCheckoutOpen(true);
-              }}
-            />
-          </Sheet>
-        </div>
+  // Con "Todos", el menú se muestra por secciones como en el menú impreso
+  const secciones =
+    activeCat === "todos"
+      ? [
+          ...state.categorias.map((c) => ({
+            id: c.id,
+            nombre: c.nombre,
+            items: visibles.filter((p) => p.categoriaId === c.id),
+          })),
+          {
+            id: "__otros",
+            nombre: "Más productos",
+            items: visibles.filter((p) => !state.categorias.some((c) => c.id === p.categoriaId)),
+          },
+        ].filter((g) => g.items.length > 0)
+      : [{ id: activeCat, nombre: "", items: visibles }];
 
-        {/* Sede elegida (toca para cambiar) */}
-        {sedeActual && (
-          <div className="max-w-5xl mx-auto px-4 pb-2">
+  return (
+    <div className="min-h-screen">
+      {/* Banda de marca (se va al hacer scroll) */}
+      <header
+        className="text-white"
+        style={{ backgroundColor: AZUL_MARCA, backgroundImage: FONDO_MANCHAS, backgroundSize: "340px 340px" }}
+      >
+        <div className="max-w-5xl mx-auto px-4 pt-3 pb-6">
+          <div className="flex items-center gap-3">
+            <img src={LOGO_OSCURO_URL} alt={state.config.nombre} className="h-12 sm:h-14 w-auto drop-shadow-lg" />
+            <div className="flex-1" />
+            <Link
+              to="/sede"
+              aria-label="Gestión de disponibilidad"
+              className="p-2 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition"
+            >
+              <Settings className="h-5 w-5" />
+            </Link>
+            <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+              <SheetTrigger asChild>
+                <button
+                  className="relative inline-flex items-center justify-center h-11 w-11 rounded-full bg-white text-primary shadow-card hover:scale-105 transition"
+                  aria-label="Carrito"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  {cart.count > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 min-w-5 px-1 rounded-full bg-[#D9731B] text-white text-[11px] font-bold flex items-center justify-center">
+                      {cart.count}
+                    </span>
+                  )}
+                </button>
+              </SheetTrigger>
+              <CartSheet
+                items={cart.items}
+                subtotal={cart.subtotal}
+                setQty={cart.setQty}
+                remove={cart.remove}
+                onCheckout={() => {
+                  setCartOpen(false);
+                  setCheckoutOpen(true);
+                }}
+              />
+            </Sheet>
+          </div>
+
+          <h1 className="mt-5 text-3xl sm:text-4xl font-display font-bold text-balance leading-tight">
+            Crujientes, doraditos y recién hechos
+          </h1>
+          <p className="text-sm sm:text-base text-white/80 mt-1">
+            Elige tus favoritos y envía tu pedido directo por WhatsApp.
+          </p>
+
+          {sedeActual && (
             <button
               onClick={() => setSelectorAbierto(true)}
-              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-sm font-semibold hover:bg-primary/15 transition"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 px-3 py-1.5 text-sm font-semibold transition"
             >
-              <MapPin className="h-4 w-4" />
+              <MapPin className="h-4 w-4 text-[#F3B15A]" />
               Pidiendo en {lugarPedido}
               <ChevronDown className="h-4 w-4" />
             </button>
-          </div>
-        )}
+          )}
+        </div>
+      </header>
 
-        {/* Category bar */}
-        <div className="max-w-5xl mx-auto px-4 pb-3 overflow-x-auto">
+      {/* Categorías: lo único fijo al hacer scroll */}
+      <nav className="sticky top-0 z-30 backdrop-blur-md bg-background/90 border-b border-border/60">
+        <div className="max-w-5xl mx-auto px-4 py-3 overflow-x-auto">
           <div className="flex gap-2 min-w-max">
             <CategoryPill active={activeCat === "todos"} onClick={() => setActiveCat("todos")}>
               Todos
@@ -197,28 +225,37 @@ function CatalogPage() {
             ))}
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* Hero strip */}
-      <section className="max-w-5xl mx-auto px-4 pt-6 pb-4">
-        <h1 className="text-2xl sm:text-3xl font-display font-bold text-primary text-balance">
-          Crujientes, doraditos y recién hechos 💙
-        </h1>
-        <p className="text-sm sm:text-base text-muted-foreground mt-1">
-          Elige tus favoritos y envía tu pedido directo por WhatsApp.
-        </p>
-      </section>
-
-      {/* Product grid - 3 col instagram-like */}
-      <main className="max-w-5xl mx-auto px-4">
+      <main className="max-w-5xl mx-auto px-4 pt-5">
         {visibles.length === 0 ? (
-          <div className="text-center py-20 text-muted-foreground">
-            No hay productos disponibles en esta categoría.
+          <div className="text-center py-20">
+            <img src={MASCOTA_URL} alt="" className="h-20 w-auto mx-auto opacity-60" />
+            <p className="mt-3 text-muted-foreground">Por ahora no hay productos disponibles aquí.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
-            {visibles.map((p) => (
-              <ProductCard key={p.id} product={p} onOpen={() => setSelected(p)} onAdd={() => cart.add(p, 1)} />
+          <div className="space-y-8">
+            {secciones.map((g) => (
+              <section key={g.id} aria-labelledby={g.nombre ? `sec-${g.id}` : undefined}>
+                {g.nombre && (
+                  <h2
+                    id={`sec-${g.id}`}
+                    className="mb-3 inline-flex items-center gap-2 rounded-full px-4 py-1.5 font-display font-bold shadow-soft"
+                    style={{
+                      backgroundColor: g.id === "__otros" ? AZUL_MARCA : colorCategoria(g.id),
+                      color: g.id === "__otros" ? "#fff" : textoCategoria(g.id),
+                    }}
+                  >
+                    {g.nombre}
+                    <span className="text-xs font-semibold opacity-75">{g.items.length}</span>
+                  </h2>
+                )}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+                  {g.items.map((p) => (
+                    <ProductCard key={p.id} product={p} onOpen={() => setSelected(p)} onAdd={() => cart.add(p, 1)} />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
         )}
@@ -240,20 +277,19 @@ function CatalogPage() {
         />
       )}
 
-      {/* Floating cart button (mobile) */}
+      {/* Botón flotante del carrito */}
       {cart.count > 0 && (
         <button
           onClick={() => setCartOpen(true)}
-          className="fixed bottom-4 left-4 right-4 mx-auto max-w-md z-20 bg-gradient-brand text-brand-foreground rounded-full px-5 py-4 shadow-card flex items-center justify-between font-semibold"
+          className="fixed bottom-4 left-4 right-4 mx-auto max-w-md z-20 bg-primary text-primary-foreground rounded-full pl-5 pr-2 py-2 shadow-card flex items-center justify-between font-semibold"
         >
           <span className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" /> {cart.count} {cart.count === 1 ? "ítem" : "ítems"}
+            <ShoppingCart className="h-5 w-5" /> Ver pedido · {cart.count} {cart.count === 1 ? "producto" : "productos"}
           </span>
-          <span>{formatCOP(cart.subtotal)}</span>
+          <span className="rounded-full bg-[#D9731B] px-4 py-2">{formatCOP(cart.subtotal)}</span>
         </button>
       )}
 
-      {/* Product detail modal */}
       <ProductModal
         product={selected}
         onClose={() => setSelected(null)}
@@ -263,28 +299,58 @@ function CatalogPage() {
         }}
       />
 
-      {/* Footer */}
-      <footer className="mt-16 pb-8 text-center border-t border-border/40 pt-8 max-w-5xl mx-auto">
-        <Link to="/politica-de-privacidad-y-uso-de-datos" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-          Política de Privacidad y Uso de Datos
-        </Link>
-      </footer>
-
-      {/* Checkout modal */}
       <CheckoutModal
         open={checkoutOpen}
         onOpenChange={setCheckoutOpen}
         items={cart.items}
         subtotal={cart.subtotal}
         whatsapp={whatsappPedido}
+        lugar={lugarPedido}
         onSent={() => {
           cart.clear();
           setCheckoutOpen(false);
         }}
       />
 
-      <footer className="text-center text-xs text-muted-foreground py-6 mt-10">
-        © {new Date().getFullYear()} {state.config.nombre}
+      {/* Pie de página */}
+      <footer
+        className="mt-16 text-white"
+        style={{ backgroundColor: AZUL_MARCA, backgroundImage: FONDO_MANCHAS, backgroundSize: "340px 340px" }}
+      >
+        <div className="max-w-5xl mx-auto px-4 py-10 grid gap-8 sm:grid-cols-2">
+          <div>
+            <img src={LOGO_OSCURO_URL} alt={state.config.nombre} className="h-14 w-auto" />
+            <a
+              href="https://www.instagram.com/kiosko_los_bunuelos/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white/90 hover:text-white"
+            >
+              <Instagram className="h-4 w-4" /> @kiosko_los_bunuelos
+            </a>
+          </div>
+          <div>
+            <h2 className="font-display font-bold text-lg">Horario de domicilios</h2>
+            <dl className="mt-3 space-y-3 text-sm">
+              <div>
+                <dt className="font-semibold text-[#F3B15A]">Lunes a sábado</dt>
+                <dd className="text-white/85">6:00 a. m. – 1:00 p. m. y 2:00 – 7:00 p. m.</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-[#F3B15A]">Domingos y festivos</dt>
+                <dd className="text-white/85">6:00 a. m. – 1:00 p. m.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div className="border-t border-white/15">
+          <div className={`max-w-5xl mx-auto px-4 pt-4 ${cart.count > 0 ? "pb-28" : "pb-6"} flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/70`}>
+            <span>© {new Date().getFullYear()} {state.config.nombre}</span>
+            <Link to="/politica-de-privacidad-y-uso-de-datos" className="hover:text-white underline underline-offset-4">
+              Política de Privacidad y Uso de Datos
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );
@@ -323,31 +389,28 @@ function ProductCard({
   onAdd: () => void;
 }) {
   return (
-    <div className="group relative bg-card rounded-2xl overflow-hidden shadow-card border border-border/60 hover:-translate-y-0.5 transition">
-      <button onClick={onOpen} className="block w-full aspect-square bg-muted overflow-hidden">
-        {product.foto ? (
-          <img
-            src={product.foto}
-            alt={product.nombre}
-            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-            <ImageOff className="h-8 w-8" />
-          </div>
+    <div className="group relative bg-card rounded-2xl overflow-hidden shadow-card border border-border/60 hover:-translate-y-0.5 transition flex flex-col">
+      <button onClick={onOpen} className="block w-full aspect-[4/3] overflow-hidden" aria-label={`Ver ${product.nombre}`}>
+        <FotoProducto product={product} className="group-hover:scale-105 transition duration-300" />
+      </button>
+      <button onClick={onOpen} className="flex-1 text-left p-3 pb-14">
+        <h3 className="font-display font-bold text-sm sm:text-base leading-tight line-clamp-2 text-foreground">
+          {product.nombre}
+        </h3>
+        {product.descripcion && (
+          <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{product.descripcion}</p>
         )}
       </button>
-      <div className="p-3 pb-12">
-        <h3 className="font-semibold text-sm sm:text-base leading-tight line-clamp-2">{product.nombre}</h3>
-        <p className="text-primary font-display font-bold mt-1">{formatCOP(product.precio)}</p>
+      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
+        <span className="text-primary font-display font-bold">{formatCOP(product.precio)}</span>
+        <button
+          onClick={onAdd}
+          aria-label={`Agregar ${product.nombre}`}
+          className="h-9 w-9 rounded-full bg-[#D9731B] text-white shadow-card flex items-center justify-center hover:scale-110 active:scale-95 transition"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
       </div>
-      <button
-        onClick={onAdd}
-        aria-label={`Agregar ${product.nombre}`}
-        className="absolute bottom-3 right-3 h-9 w-9 rounded-full bg-secondary text-secondary-foreground shadow-card flex items-center justify-center hover:scale-110 transition"
-      >
-        <Plus className="h-5 w-5" />
-      </button>
     </div>
   );
 }
@@ -375,20 +438,14 @@ function ProductModal({
       <DialogContent className="max-w-md p-0 overflow-hidden">
         {product && (
           <>
-            <div className="aspect-square bg-muted">
-              {product.foto ? (
-                <img src={product.foto} alt={product.nombre} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                  <ImageOff className="h-10 w-10" />
-                </div>
-              )}
+            <div className="aspect-[4/3]">
+              <FotoProducto product={product} mascota="w-[30%]" />
             </div>
             <div className="p-5">
               <DialogHeader>
                 <DialogTitle className="font-display text-xl">{product.nombre}</DialogTitle>
                 <DialogDescription className="text-muted-foreground">
-                  {product.descripcion || "Delicioso producto."}
+                  {product.descripcion || "Recién hecho, como siempre."}
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-4 flex items-center justify-between">
@@ -416,10 +473,10 @@ function ProductModal({
                   onAdd(qty);
                   setQty(1);
                 }}
-                className="w-full mt-5 bg-gradient-brand text-brand-foreground hover:opacity-95"
+                className="w-full mt-5 bg-[#D9731B] text-white hover:bg-[#C56614]"
                 size="lg"
               >
-                Agregar al carrito
+                <Plus className="h-4 w-4 mr-1" /> Agregar al pedido
               </Button>
             </div>
           </>
@@ -449,14 +506,15 @@ function CartSheet({
       </SheetHeader>
       <div className="flex-1 overflow-y-auto py-4 space-y-3">
         {items.length === 0 ? (
-          <p className="text-muted-foreground text-center py-10">El carrito está vacío.</p>
+          <div className="text-center py-10">
+            <img src={MASCOTA_URL} alt="" className="h-20 w-auto mx-auto opacity-60" />
+            <p className="mt-3 text-muted-foreground">Tu pedido está vacío.</p>
+          </div>
         ) : (
           items.map((i) => (
             <div key={i.product.id} className="flex gap-3 bg-muted/50 rounded-xl p-2">
-              <div className="h-16 w-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                {i.product.foto ? (
-                  <img src={i.product.foto} alt={i.product.nombre} className="w-full h-full object-cover" />
-                ) : null}
+              <div className="h-16 w-16 rounded-lg overflow-hidden flex-shrink-0">
+                <FotoProducto product={i.product} conNombre={false} mascota="w-3/4" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm line-clamp-1">{i.product.nombre}</p>
@@ -494,7 +552,7 @@ function CartSheet({
             <span className="font-semibold">Subtotal</span>
             <span className="font-display font-bold text-primary">{formatCOP(subtotal)}</span>
           </div>
-          <Button onClick={onCheckout} size="lg" className="w-full bg-gradient-brand text-brand-foreground hover:opacity-95">
+          <Button onClick={onCheckout} size="lg" className="w-full bg-[#25D366] text-[#073B1F] font-bold hover:bg-[#20BD5A]">
             <WhatsAppIcon className="h-4 w-4 mr-2" />
             Enviar pedido por WhatsApp
           </Button>
@@ -510,6 +568,7 @@ function CheckoutModal({
   items,
   subtotal,
   whatsapp,
+  lugar,
   onSent,
 }: {
   open: boolean;
@@ -517,6 +576,7 @@ function CheckoutModal({
   items: ReturnType<typeof useCart>["items"];
   subtotal: number;
   whatsapp: string;
+  lugar: string;
   onSent: () => void;
 }) {
   const [nombre, setNombre] = useState("");
@@ -561,6 +621,15 @@ Total: ${formatCOP(subtotal)}`;
           <DialogTitle className="font-display text-xl">Datos de entrega</DialogTitle>
           <DialogDescription>Completa para enviar tu pedido por WhatsApp.</DialogDescription>
         </DialogHeader>
+        <div className="rounded-xl bg-primary/5 border border-primary/15 p-3 text-sm flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2 min-w-0">
+            <MapPin className="h-4 w-4 text-[#D9731B] shrink-0" />
+            <span className="truncate">
+              Llega a <strong>{lugar || "la sede"}</strong>
+            </span>
+          </span>
+          <span className="font-display font-bold text-primary shrink-0">{formatCOP(subtotal)}</span>
+        </div>
         <div className="space-y-3 mt-2">
           <div>
             <Label htmlFor="nombre">Nombre completo</Label>
@@ -603,7 +672,7 @@ Total: ${formatCOP(subtotal)}`;
             onClick={enviar}
             disabled={!nombre.trim() || !direccion.trim() || !telefono.trim()}
             size="lg"
-            className="w-full bg-gradient-brand text-brand-foreground"
+            className="w-full bg-[#25D366] text-[#073B1F] font-bold hover:bg-[#20BD5A]"
           >
             <WhatsAppIcon className="h-4 w-4 mr-2" /> Enviar por WhatsApp
           </Button>
