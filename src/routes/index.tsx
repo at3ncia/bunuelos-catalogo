@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, type Sede } from "@/lib/sedes";
+import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, listarPuntos, PUNTOS_RESPALDO, type Sede, type PuntoPedido } from "@/lib/sedes";
 import { MapPin, ChevronDown } from "lucide-react";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
@@ -50,12 +50,30 @@ function CatalogPage() {
   const [dispSede, setDispSede] = useState<Record<string, boolean>>({});
 
   const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const [puntos, setPuntos] = useState<PuntoPedido[]>([]);
+  const [puntoId, setPuntoId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem("puntoSeleccionado");
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     listarSedes()
       .then((lista) => setSedes(lista.length ? lista : SEDES_RESPALDO))
       .catch(() => setSedes(SEDES_RESPALDO));
+    listarPuntos()
+      .then((lista) => setPuntos(lista.length ? lista : PUNTOS_RESPALDO))
+      .catch(() => setPuntos(PUNTOS_RESPALDO));
   }, []);
+
+  useEffect(() => {
+    try {
+      if (puntoId) localStorage.setItem("puntoSeleccionado", puntoId);
+      else localStorage.removeItem("puntoSeleccionado");
+    } catch {}
+  }, [puntoId]);
 
   // Si la sede guardada ya no existe, se vuelve a preguntar
   useEffect(() => {
@@ -73,7 +91,18 @@ function CatalogPage() {
   }, [sedeId]);
 
   const sedeActual = sedes.find((s) => s.id === sedeId) ?? null;
-  const whatsappPedido = sedeActual?.whatsapp || state.config.whatsapp;
+  // Punto de pedido dentro de la ciudad: decide a qué WhatsApp llega el pedido
+  const puntosDeSede = puntos.filter((p) => p.sede_id === sedeId);
+  const puntoActual =
+    puntosDeSede.find((p) => p.id === puntoId) ?? (puntosDeSede.length === 1 ? puntosDeSede[0] : null);
+  const faltaPunto = !!sedeId && puntosDeSede.length > 1 && !puntoActual;
+  const whatsappPedido = puntoActual?.whatsapp || sedeActual?.whatsapp || state.config.whatsapp;
+  const lugarPedido =
+    sedeActual && puntoActual && puntosDeSede.length > 1
+      ? `${puntoActual.nombre}, ${sedeActual.ciudad}`
+      : sedeActual
+        ? etiquetaSede(sedeActual)
+        : "";
 
   // ⚠️ Todos los hooks deben ir ANTES de cualquier return condicional
   const visibles = useMemo(
@@ -149,7 +178,7 @@ function CatalogPage() {
               className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-sm font-semibold hover:bg-primary/15 transition"
             >
               <MapPin className="h-4 w-4" />
-              Pidiendo en {etiquetaSede(sedeActual)}
+              Pidiendo en {lugarPedido}
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>
@@ -195,13 +224,16 @@ function CatalogPage() {
         )}
       </main>
 
-      {sedes.length > 0 && (!sedeId || selectorAbierto) && (
+      {sedes.length > 0 && (!sedeId || selectorAbierto || faltaPunto) && (
         <SelectorSede
           sedes={sedes}
-          actual={sedeId}
-          puedeCerrar={!!sedeId}
-          onElegir={(id) => {
+          puntos={puntos}
+          actualSede={sedeId}
+          actualPunto={puntoActual?.id ?? null}
+          puedeCerrar={!!sedeId && !faltaPunto}
+          onElegir={(id, punto) => {
             setSedeId(id);
+            setPuntoId(punto);
             setSelectorAbierto(false);
           }}
           onCerrar={() => setSelectorAbierto(false)}
@@ -583,19 +615,64 @@ Total: ${formatCOP(subtotal)}`;
 
 function SelectorSede({
   sedes,
-  actual,
+  puntos,
+  actualSede,
+  actualPunto,
   puedeCerrar,
   onElegir,
   onCerrar,
 }: {
   sedes: Sede[];
-  actual: number | null;
+  puntos: PuntoPedido[];
+  actualSede: number | null;
+  actualPunto: string | null;
   puedeCerrar: boolean;
-  onElegir: (id: number) => void;
+  onElegir: (sedeId: number, puntoId: string | null) => void;
   onCerrar: () => void;
 }) {
+  const puntosDe = (id: number) => puntos.filter((p) => p.sede_id === id);
+  // Si ya eligió ciudad pero falta el punto, abrimos directo en el paso 2
+  const [sedePaso2, setSedePaso2] = useState<Sede | null>(() => {
+    const s = sedes.find((x) => x.id === actualSede);
+    return s && puntosDe(s.id).length > 1 && !actualPunto ? s : null;
+  });
+
   const ciudades = Array.from(new Set(sedes.map((s) => s.ciudad)));
   const porCiudad = esPorCiudad(sedes);
+
+  const elegirSede = (s: Sede) => {
+    const lista = puntosDe(s.id);
+    if (lista.length > 1) setSedePaso2(s);
+    else onElegir(s.id, lista[0]?.id ?? null);
+  };
+
+  const Tarjeta = ({
+    titulo,
+    detalle,
+    activa,
+    onClick,
+  }: {
+    titulo: string;
+    detalle: string;
+    activa: boolean;
+    onClick: () => void;
+  }) => (
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-2xl border p-4 flex items-center gap-3 transition shadow-soft ${
+        activa ? "border-primary bg-primary/5" : "border-border bg-card hover:border-primary/50"
+      }`}
+    >
+      <span className="h-10 w-10 shrink-0 rounded-full bg-secondary/20 text-secondary flex items-center justify-center">
+        <MapPin className="h-5 w-5" />
+      </span>
+      <span className="min-w-0">
+        <span className="block font-semibold text-lg">{titulo}</span>
+        <span className="block text-xs text-muted-foreground">{detalle}</span>
+      </span>
+    </button>
+  );
+
   return (
     <div
       role="dialog"
@@ -607,48 +684,68 @@ function SelectorSede({
         <div className="flex flex-col items-center text-center">
           <img src={LOGO_URL} alt="Los Buñuelos Los Originales" className="w-64 h-auto" />
           <h2 id="titulo-sede" className="mt-6 font-display text-2xl font-bold text-primary">
-            {porCiudad ? "¿Desde qué ciudad pides?" : "¿A qué sede quieres pedir?"}
+            {sedePaso2
+              ? "¿Qué punto te queda más cerca?"
+              : porCiudad
+                ? "¿Desde qué ciudad pides?"
+                : "¿A qué sede quieres pedir?"}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">{porCiudad ? "Te mostramos lo disponible en tu ciudad." : "Te mostramos lo disponible en esa sede."}</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {sedePaso2
+              ? `Tu pedido llega directo a ese punto en ${sedePaso2.ciudad}.`
+              : porCiudad
+                ? "Te mostramos lo disponible en tu ciudad."
+                : "Te mostramos lo disponible en esa sede."}
+          </p>
         </div>
 
-        <div className={`mt-6 ${porCiudad ? "space-y-3" : "space-y-6"}`}>
-          {ciudades.map((ciudad) => {
-            const lista = sedes.filter((s) => s.ciudad === ciudad);
-            return (
-              <section key={ciudad}>
-                {!porCiudad && (
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                    {ciudad} · {lista.length} {lista.length === 1 ? "sede" : "sedes"}
-                  </h3>
-                )}
-                <div className="space-y-2">
-                  {lista.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => onElegir(s.id)}
-                      className={`w-full text-left rounded-2xl border p-4 flex items-center gap-3 transition shadow-soft ${
-                        actual === s.id
-                          ? "border-primary bg-primary/5"
-                          : "border-border bg-card hover:border-primary/50"
-                      }`}
-                    >
-                      <span className="h-10 w-10 shrink-0 rounded-full bg-secondary/20 text-secondary flex items-center justify-center">
-                        <MapPin className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block font-semibold text-lg">{nombreCorto(s)}</span>
-                        <span className="block text-xs text-muted-foreground">{s.direccion}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        {sedePaso2 ? (
+          <div className="mt-6 space-y-3">
+            {puntosDe(sedePaso2.id).map((p) => (
+              <Tarjeta
+                key={p.id}
+                titulo={p.nombre}
+                detalle={p.detalle}
+                activa={actualPunto === p.id}
+                onClick={() => onElegir(sedePaso2.id, p.id)}
+              />
+            ))}
+            <button
+              onClick={() => setSedePaso2(null)}
+              className="w-full pt-2 text-sm text-muted-foreground underline underline-offset-4"
+            >
+              Cambiar de ciudad
+            </button>
+          </div>
+        ) : (
+          <div className={`mt-6 ${porCiudad ? "space-y-3" : "space-y-6"}`}>
+            {ciudades.map((ciudad) => {
+              const lista = sedes.filter((s) => s.ciudad === ciudad);
+              return (
+                <section key={ciudad}>
+                  {!porCiudad && (
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                      {ciudad} · {lista.length} {lista.length === 1 ? "sede" : "sedes"}
+                    </h3>
+                  )}
+                  <div className="space-y-2">
+                    {lista.map((s) => (
+                      <Tarjeta
+                        key={s.id}
+                        titulo={nombreCorto(s)}
+                        detalle={s.direccion}
+                        activa={actualSede === s.id}
+                        onClick={() => elegirSede(s)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
 
-        {puedeCerrar && (
+        {puedeCerrar && !sedePaso2 && (
           <button onClick={onCerrar} className="mt-6 text-sm text-muted-foreground underline underline-offset-4">
             Cancelar
           </button>

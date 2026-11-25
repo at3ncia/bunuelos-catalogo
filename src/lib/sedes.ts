@@ -96,3 +96,32 @@ export async function cambiarClaveSede(
   if (error) return { ok: false, error: error.message };
   return data as RpcResult;
 }
+
+// ── Puntos de pedido: a qué WhatsApp llega el pedido dentro de una ciudad ──
+
+export type PuntoPedido = {
+  id: string;
+  sede_id: number;
+  nombre: string;
+  detalle: string;
+  whatsapp: string;
+  orden: number;
+};
+
+export const PUNTOS_RESPALDO: PuntoPedido[] = [
+  { id: "ctg-terminal-castellana", sede_id: 1, nombre: "Terminal · Castellana", detalle: "Terminal de transporte y Castellana", whatsapp: "573013416503", orden: 0 },
+  { id: "ctg-bocagrande", sede_id: 1, nombre: "Bocagrande", detalle: "Bocagrande, Cra 2 Calle 4", whatsapp: "573226768027", orden: 1 },
+  { id: "baq-centro", sede_id: 4, nombre: "Centro", detalle: "Centro, Calle 38 No 38-10", whatsapp: "573106107552", orden: 0 },
+];
+
+export async function listarPuntos(): Promise<PuntoPedido[]> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Tiempo de espera agotado")), 6000),
+  );
+  const { data, error } = await Promise.race([
+    supabase.from("puntos_pedido").select("*").order("orden"),
+    timeout,
+  ]);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PuntoPedido[];
+}
