@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  Camera,
   Check,
   ExternalLink,
   Clock,
@@ -50,6 +51,7 @@ import {
   type Resultado,
 } from "@/lib/admin";
 import { colorCategoria, FotoProducto } from "@/components/foto-producto";
+import { subirFoto } from "@/lib/fotos";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
@@ -397,6 +399,7 @@ function PestanaProductos({ datos, clave, ejecutar }: PropsPestana) {
 
       <EditorProducto
         producto={editando}
+        clave={clave}
         categorias={datos.categorias}
         onCerrar={() => setEditando(null)}
         onGuardar={async (p) => {
@@ -424,12 +427,14 @@ function Etiqueta({ children, tono }: { children: React.ReactNode; tono: "gris" 
 
 function EditorProducto({
   producto,
+  clave,
   categorias,
   onCerrar,
   onGuardar,
   onBorrar,
 }: {
   producto: Product | null;
+  clave: string;
   categorias: Category[];
   onCerrar: () => void;
   onGuardar: (p: Product) => Promise<void>;
@@ -495,9 +500,12 @@ function EditorProducto({
               maxLength={300}
             />
           </Campo>
-          <Campo etiqueta="Foto (enlace)" ayuda="Opcional. Pega el enlace de una imagen; sin foto se muestra la mascota.">
-            <input className={INPUT} value={p.foto} onChange={(e) => cambiar({ foto: e.target.value.trim() })} placeholder="https://…" />
-          </Campo>
+          <SelectorFoto
+            producto={p}
+            clave={clave}
+            color={colorCategoria(categorias, p.categoriaId)}
+            onCambiar={(foto) => cambiar({ foto })}
+          />
 
           <Interruptor
             activo={p.disponible}
@@ -546,6 +554,88 @@ function EditorProducto({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SelectorFoto({
+  producto,
+  clave,
+  color,
+  onCambiar,
+}: {
+  producto: Product;
+  clave: string;
+  color: string;
+  onCambiar: (url: string) => void;
+}) {
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState("");
+  const [verEnlace, setVerEnlace] = useState(false);
+
+  const elegir = async (archivo: File | undefined) => {
+    if (!archivo) return;
+    setSubiendo(true);
+    setError("");
+    const r = await subirFoto(clave, producto.id || slug(producto.nombre), archivo);
+    setSubiendo(false);
+    if (r.ok) onCambiar(r.url);
+    else setError(r.error);
+  };
+
+  return (
+    <div className="space-y-2">
+      <span className="text-sm font-semibold">Foto</span>
+      <div className="flex items-center gap-3">
+        <div className="relative h-24 w-32 shrink-0 rounded-xl overflow-hidden border border-border">
+          <FotoProducto product={producto} color={color} mascota="w-1/2" />
+          {subiendo && (
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1 space-y-2">
+          {/* accept=image/*: en el celular ofrece tomar foto o elegir de la galería */}
+          <label
+            className={`flex h-11 items-center justify-center gap-2 rounded-xl bg-[#D9731B] text-white font-bold cursor-pointer ${
+              subiendo ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            <Camera className="h-5 w-5" />
+            {subiendo ? "Subiendo…" : producto.foto ? "Cambiar foto" : "Subir foto"}
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(e) => {
+                elegir(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {producto.foto && !subiendo && (
+            <button
+              type="button"
+              onClick={() => onCambiar("")}
+              className="w-full h-9 rounded-xl border-2 border-border text-sm font-semibold text-muted-foreground"
+            >
+              Quitar foto
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <p role="alert" className="rounded-lg bg-destructive/10 text-destructive text-sm px-3 py-2">{error}</p>}
+      <p className="text-xs text-muted-foreground">
+        Desde el celular puedes tomarla o elegirla de la galería. Se ajusta sola para que cargue rápido. Sin foto se
+        muestra la mascota.
+      </p>
+      <button type="button" onClick={() => setVerEnlace((v) => !v)} className="text-xs font-semibold text-primary">
+        {verEnlace ? "Ocultar" : "¿Tienes la foto en internet? Pega el enlace"}
+      </button>
+      {verEnlace && (
+        <input className={INPUT} value={producto.foto} onChange={(e) => onCambiar(e.target.value.trim())} placeholder="https://…" />
+      )}
+    </div>
   );
 }
 

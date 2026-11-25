@@ -13,10 +13,11 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 
 ## Qué se cambia desde `/admin` (sin pedir cambios de código)
 
-- **Productos:** crear, editar precio, nombre, descripción y foto (enlace), ocultar o borrar.
+- **Productos:** crear, editar precio, nombre y descripción, ocultar o borrar.
+- **Fotos:** en cada producto, "Subir foto" desde el celular (cámara o galería) o el computador. Se comprime sola (~100-200 KB).
 - **Promos por día:** en un producto, activa "Solo ciertos días" (por ejemplo, el Martes 2x1). Aparece solo esos días.
 - **Categorías:** nombre, orden y color. El texto encima del color se ajusta solo para que se lea.
-- **WhatsApp:** número, mensaje inicial y texto del botón de cada punto de pedido. Lo mismo alimenta el catálogo y `/links`.
+- **Links:** la página `/links` completa: texto bajo el logo, botón dorado del menú (texto y mostrar/ocultar), botones extra (Maps, TikTok, apps de domicilio…) y los puntos de WhatsApp (número, mensaje inicial, texto del botón).
 - **Ajustes:** título y subtítulo de la portada, Instagram, botón dorado de `/links`, medios de pago.
 - **Horario de domicilios:** días y franjas. Fuera de horario, el catálogo avisa solo cuándo abren. Los **festivos de Colombia se calculan automáticamente** (usan el horario del domingo).
 - **Reinicio diario:** la hora en que todo lo marcado como "Se acabó hoy" vuelve a estar disponible.
@@ -33,7 +34,8 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 
 - Diseño, colores de marca, logo.
 - Campos nuevos (por ejemplo, tamaños o adiciones por producto).
-- Subir fotos desde el celular (hoy se pega un enlace).
+- Imagen de vista previa al compartir el enlace, favicon e íconos de la app (archivos en `public/`: `og-image.png`, `favicon.png`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`). WhatsApp e Instagram leen solo el `index.html`, por eso no salen de la base de datos.
+- Los logos (`public/logo-claro.png`, `public/logo-oscuro.png`).
 
 ## Base de datos (Supabase): orden de los scripts
 
@@ -47,6 +49,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 6. `sql/005_por_ciudad.sql` — operación por ciudad
 7. `sql/006_puntos_pedido.sql` — puntos de pedido con su WhatsApp
 8. `sql/007_panel_negocio.sql` — panel del dueño y ajustes editables
+9. `sql/008_fotos.sql` — subir fotos de productos desde el panel
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 
