@@ -489,7 +489,7 @@ function ProductModal({
         }
       }}
     >
-      <DialogContent className="max-w-md p-0 overflow-hidden">
+      <DialogContent className="max-w-md p-0 overflow-y-auto max-h-[calc(100dvh-7rem)]">
         {product && (
           <>
             <div className="aspect-[4/3]">
@@ -603,7 +603,7 @@ function CartSheet({
         )}
       </div>
       {items.length > 0 && (
-        <div className="border-t border-border pt-4 space-y-3">
+        <div className="border-t border-border pt-4 pb-14 space-y-3">
           <div className="flex justify-between text-lg">
             <span className="font-semibold">Subtotal</span>
             <span className="font-display font-bold text-primary">{formatCOP(subtotal)}</span>
@@ -674,7 +674,7 @@ Total: ${formatCOP(subtotal)}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[calc(100dvh-7rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Datos de entrega</DialogTitle>
           <DialogDescription>Completa para enviar tu pedido por WhatsApp.</DialogDescription>

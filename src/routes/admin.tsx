@@ -454,7 +454,7 @@ function EditorProducto({
 
   return (
     <Dialog open={!!producto} onOpenChange={(o) => !o && onCerrar()}>
-      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[calc(100dvh-7rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">{p.id ? "Editar producto" : "Nuevo producto"}</DialogTitle>
           <DialogDescription>Los cambios se ven en el catálogo al guardar.</DialogDescription>
