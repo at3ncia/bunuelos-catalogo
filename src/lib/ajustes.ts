@@ -4,7 +4,26 @@
 export type Franja = [string, string]; // ["06:00", "13:00"]
 export type ReglaHorario = { dias: number[]; franjas: Franja[] }; // dias: 0 = domingo … 6 = sábado
 
+// Botón extra de /links (Google Maps, TikTok, Rappi, una promo…)
+export type IconoEnlace = "web" | "ubicacion" | "instagram" | "tiktok" | "facebook" | "whatsapp" | "telefono" | "moto";
+export type EstiloEnlace = "naranja" | "dorado" | "blanco";
+export type Enlace = { id: string; texto: string; url: string; icono: IconoEnlace; estilo: EstiloEnlace; activo: boolean };
+
+export const ICONOS_ENLACE: { id: IconoEnlace; nombre: string }[] = [
+  { id: "web", nombre: "Página web" },
+  { id: "ubicacion", nombre: "Ubicación / Maps" },
+  { id: "instagram", nombre: "Instagram" },
+  { id: "tiktok", nombre: "TikTok" },
+  { id: "facebook", nombre: "Facebook" },
+  { id: "whatsapp", nombre: "WhatsApp" },
+  { id: "telefono", nombre: "Llamada" },
+  { id: "moto", nombre: "Domicilios / app" },
+];
+
 export type Ajustes = {
+  bio: string; // texto bajo el logo en /links
+  mostrar_boton_menu: boolean;
+  enlaces: Enlace[];
   titulo: string;
   subtitulo: string;
   instagram: string;
@@ -15,6 +34,9 @@ export type Ajustes = {
 };
 
 export const AJUSTES_POR_DEFECTO: Ajustes = {
+  bio: "",
+  mostrar_boton_menu: true,
+  enlaces: [],
   titulo: "Crujientes, doraditos y recién hechos",
   subtitulo: "Elige tus favoritos y envía tu pedido directo por WhatsApp.",
   instagram: "kiosko_los_bunuelos",
@@ -31,7 +53,23 @@ export const AJUSTES_POR_DEFECTO: Ajustes = {
 export function normalizarAjustes(raw: unknown): Ajustes {
   const a = (raw && typeof raw === "object" ? raw : {}) as Partial<Ajustes>;
   const d = AJUSTES_POR_DEFECTO;
+  const iconos = ICONOS_ENLACE.map((i) => i.id);
+  const enlaces: Enlace[] = Array.isArray(a.enlaces)
+    ? a.enlaces
+        .filter((e) => e && typeof e === "object" && typeof e.url === "string")
+        .map((e) => ({
+          id: String(e.id || Math.random().toString(36).slice(2, 8)),
+          texto: String(e.texto ?? ""),
+          url: e.url,
+          icono: iconos.includes(e.icono) ? e.icono : "web",
+          estilo: (["naranja", "dorado", "blanco"] as const).includes(e.estilo) ? e.estilo : "naranja",
+          activo: e.activo !== false,
+        }))
+    : d.enlaces;
   return {
+    bio: typeof a.bio === "string" ? a.bio : d.bio,
+    mostrar_boton_menu: a.mostrar_boton_menu !== false,
+    enlaces,
     titulo: typeof a.titulo === "string" && a.titulo.trim() ? a.titulo : d.titulo,
     subtitulo: typeof a.subtitulo === "string" ? a.subtitulo : d.subtitulo,
     instagram: typeof a.instagram === "string" ? a.instagram.replace(/^@/, "") : d.instagram,
@@ -175,4 +213,19 @@ export function etiquetaFranjas(franjas: Franja[]) {
 export function visibleHoy(dias: number[] | null | undefined, base = new Date()) {
   if (!dias || dias.length === 0) return true;
   return dias.includes(ahoraColombia(base).diaSemana);
+}
+
+// "maps.app.goo.gl/x" -> "https://maps.app.goo.gl/x"; "3001234567" con ícono llamada -> "tel:+573001234567"
+export function urlEnlace(e: Pick<Enlace, "url" | "icono">) {
+  const u = e.url.trim();
+  if (!u) return "";
+  if (e.icono === "telefono" && /^[\d\s+()-]+$/.test(u)) {
+    const n = u.replace(/\D/g, "");
+    return `tel:+${n.length === 10 ? `57${n}` : n}`;
+  }
+  if (e.icono === "whatsapp" && /^[\d\s+()-]+$/.test(u)) {
+    const n = u.replace(/\D/g, "");
+    return `https://wa.me/${n.length === 10 ? `57${n}` : n}`;
+  }
+  return /^(https?:|tel:|mailto:)/i.test(u) ? u : `https://${u}`;
 }

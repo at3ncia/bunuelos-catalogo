@@ -73,10 +73,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Los Buñuelos Los Originales — Pide en línea" },
-      { name: "description", content: "Pide buñuelos, comidas, bebidas y combos. Los Originales, directo a tu casa por WhatsApp." },
+      // Mismo texto que index.html (es el que leen WhatsApp y las redes al compartir)
+      { name: "description", content: "🧡Kiosco los buñuelos los originales + de 10 años en el mercado" },
       { property: "og:title", content: "Los Buñuelos Los Originales" },
-      { property: "og:description", content: "Catálogo de comida callejera. Pide fácil por WhatsApp." },
+      { property: "og:description", content: "🧡Kiosco los buñuelos los originales + de 10 años en el mercado" },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: "https://bunuelos-catalogo.netlify.app/og-image.png" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Check,
+  ExternalLink,
   Clock,
   Eye,
   EyeOff,
@@ -22,7 +23,17 @@ import {
 import { AZUL_MARCA, FONDO_MANCHAS, LOGO_OSCURO_URL } from "@/lib/brand";
 import { formatCOP } from "@/lib/cart";
 import { slug, uid, type Category, type Product } from "@/lib/storage";
-import { etiquetaDias, etiquetaFranjas, NOMBRES_DIA, type Ajustes, type Franja, type ReglaHorario } from "@/lib/ajustes";
+import {
+  etiquetaDias,
+  etiquetaFranjas,
+  ICONOS_ENLACE,
+  NOMBRES_DIA,
+  urlEnlace,
+  type Ajustes,
+  type Enlace,
+  type Franja,
+  type ReglaHorario,
+} from "@/lib/ajustes";
 import { etiquetaSede, type PuntoPedido, type Sede } from "@/lib/sedes";
 import {
   borrarCategoria,
@@ -234,7 +245,7 @@ function Panel({
   const pestanas: [Pestana, string, typeof Store][] = [
     ["productos", "Productos", Store],
     ["categorias", "Categorías", Tag],
-    ["whatsapp", "WhatsApp", Store],
+    ["whatsapp", "Links", Store],
     ["ajustes", "Ajustes", Settings2],
     ["seguridad", "Claves", KeyRound],
   ];
@@ -669,7 +680,8 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
   const [nuevo, setNuevo] = useState<PuntoPedido | null>(null);
   return (
     <div className="space-y-4">
-      <Tarjeta>
+      <EditorPaginaLinks datos={datos} clave={clave} ejecutar={ejecutar} />
+      <Tarjeta titulo="Puntos de pedido (WhatsApp)" icono={<WhatsAppIcon className="h-4 w-4" />}>
         <p className="text-sm text-muted-foreground">
           Cada punto recibe los pedidos de su ciudad por WhatsApp y aparece como botón en <strong>/links</strong>. Si una
           ciudad tiene varios puntos, el cliente elige el más cercano.
@@ -806,6 +818,171 @@ function EditorPunto({
   );
 }
 
+/* ── Página /links ─────────────────────────────────────────────────────── */
+
+const ENLACE_NUEVO = (): Enlace => ({
+  id: uid().slice(0, 6),
+  texto: "",
+  url: "",
+  icono: "ubicacion",
+  estilo: "blanco",
+  activo: true,
+});
+
+function EditorPaginaLinks({ datos, clave, ejecutar }: PropsPestana) {
+  const base = datos.ajustes;
+  const [bio, setBio] = useState(base.bio);
+  const [botonMenu, setBotonMenu] = useState(base.boton_menu);
+  const [mostrarMenu, setMostrarMenu] = useState(base.mostrar_boton_menu);
+  const [enlaces, setEnlaces] = useState<Enlace[]>(base.enlaces);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    setBio(base.bio);
+    setBotonMenu(base.boton_menu);
+    setMostrarMenu(base.mostrar_boton_menu);
+    setEnlaces(base.enlaces);
+  }, [base]);
+
+  const final: Ajustes = { ...base, bio, boton_menu: botonMenu, mostrar_boton_menu: mostrarMenu, enlaces };
+  const sinCambios = JSON.stringify(final) === JSON.stringify(base);
+  const cambiarEnlace = (i: number, c: Partial<Enlace> | null) => {
+    const lista = [...enlaces];
+    if (c) lista[i] = { ...lista[i], ...c };
+    else lista.splice(i, 1);
+    setEnlaces(lista);
+  };
+  const mover = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= enlaces.length) return;
+    const lista = [...enlaces];
+    [lista[i], lista[j]] = [lista[j], lista[i]];
+    setEnlaces(lista);
+  };
+
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setGuardando(true);
+        await ejecutar(guardarAjustes(clave, final), "Página /links guardada");
+        setGuardando(false);
+      }}
+      className="bg-card border border-border rounded-2xl shadow-card p-4 space-y-4"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="font-display font-bold text-primary">Página /links</h2>
+        <a
+          href="/links"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-semibold text-primary"
+        >
+          Ver <ExternalLink className="h-4 w-4" />
+        </a>
+      </div>
+
+      <Campo etiqueta="Texto bajo el logo" ayuda="Opcional. Por ejemplo: + de 10 años en el mercado 🧡">
+        <textarea className={`${INPUT} h-auto py-2`} rows={2} maxLength={160} value={bio} onChange={(e) => setBio(e.target.value)} />
+      </Campo>
+
+      <Interruptor
+        activo={mostrarMenu}
+        onCambiar={setMostrarMenu}
+        titulo="Botón dorado del menú"
+        detalle="Lleva al catálogo y pide la ciudad. Tiene el destello cada 4 segundos."
+      />
+      {mostrarMenu && (
+        <Campo etiqueta="Texto del botón dorado">
+          <input className={INPUT} value={botonMenu} onChange={(e) => setBotonMenu(e.target.value)} maxLength={40} />
+        </Campo>
+      )}
+
+      <div className="space-y-2">
+        <p className="text-sm font-semibold">Botones extra</p>
+        <p className="text-xs text-muted-foreground">
+          Aparecen después de los botones de WhatsApp: ubicación en Maps, TikTok, Rappi, una promo…
+        </p>
+        {enlaces.map((e, i) => (
+          <div key={e.id} className={`rounded-xl border border-border p-3 space-y-2 ${e.activo ? "" : "opacity-60"}`}>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                className={`${INPUT} h-10`}
+                value={e.texto}
+                onChange={(ev) => cambiarEnlace(i, { texto: ev.target.value })}
+                placeholder="Texto del botón"
+                aria-label="Texto del botón"
+              />
+              <select
+                className={`${INPUT} h-10`}
+                value={e.icono}
+                onChange={(ev) => cambiarEnlace(i, { icono: ev.target.value as Enlace["icono"] })}
+                aria-label="Ícono"
+              >
+                {ICONOS_ENLACE.map((ic) => (
+                  <option key={ic.id} value={ic.id}>
+                    {ic.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              className={`${INPUT} h-10`}
+              value={e.url}
+              onChange={(ev) => cambiarEnlace(i, { url: ev.target.value })}
+              placeholder={e.icono === "telefono" || e.icono === "whatsapp" ? "3001234567" : "maps.app.goo.gl/…"}
+              aria-label="Enlace"
+            />
+            {e.url && <p className="text-xs text-muted-foreground truncate">Abre: {urlEnlace(e)}</p>}
+            <div className="flex items-center gap-1">
+              {(["blanco", "naranja", "dorado"] as const).map((est) => (
+                <button
+                  key={est}
+                  type="button"
+                  onClick={() => cambiarEnlace(i, { estilo: est })}
+                  aria-pressed={e.estilo === est}
+                  className={`h-8 px-3 rounded-full text-xs font-semibold border-2 ${
+                    e.estilo === est ? "border-primary" : "border-transparent"
+                  } ${est === "blanco" ? "bg-white text-[#122a6b] shadow-soft" : est === "naranja" ? "bg-[#D9731B] text-white" : "btn-dorado"}`}
+                >
+                  {est[0].toUpperCase() + est.slice(1)}
+                </button>
+              ))}
+              <span className="flex-1" />
+              <button type="button" onClick={() => cambiarEnlace(i, { activo: !e.activo })} className="h-8 px-2 rounded-lg text-xs font-semibold hover:bg-muted">
+                {e.activo ? "Ocultar" : "Mostrar"}
+              </button>
+              <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} aria-label="Subir" className="p-1.5 disabled:opacity-25">
+                <ArrowUp className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => mover(i, 1)} disabled={i === enlaces.length - 1} aria-label="Bajar" className="p-1.5 disabled:opacity-25">
+                <ArrowDown className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => cambiarEnlace(i, null)} aria-label="Quitar" className="p-1.5 text-destructive">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setEnlaces([...enlaces, ENLACE_NUEVO()])}
+          className="w-full h-10 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground font-semibold hover:border-primary hover:text-primary"
+        >
+          + Agregar botón
+        </button>
+      </div>
+
+      <button
+        type="submit"
+        disabled={guardando || sinCambios}
+        className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+      >
+        {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {sinCambios ? "Sin cambios" : "Guardar página /links"}
+      </button>
+    </form>
+  );
+}
+
 /* ── Ajustes generales ─────────────────────────────────────────────────── */
 
 function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
@@ -845,14 +1022,9 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
         <Campo etiqueta="Subtítulo">
           <input className={INPUT} value={a.subtitulo} onChange={(e) => cambiar({ subtitulo: e.target.value })} maxLength={140} />
         </Campo>
-        <div className="grid grid-cols-2 gap-3">
-          <Campo etiqueta="Instagram (sin @)">
-            <input className={INPUT} value={a.instagram} onChange={(e) => cambiar({ instagram: e.target.value.replace(/^@/, "").trim() })} />
-          </Campo>
-          <Campo etiqueta="Botón dorado de /links">
-            <input className={INPUT} value={a.boton_menu} onChange={(e) => cambiar({ boton_menu: e.target.value })} />
-          </Campo>
-        </div>
+        <Campo etiqueta="Instagram (sin @)" ayuda="Aparece en el pie del catálogo y en /links.">
+          <input className={INPUT} value={a.instagram} onChange={(e) => cambiar({ instagram: e.target.value.replace(/^@/, "").trim() })} />
+        </Campo>
       </Tarjeta>
 
       <Tarjeta titulo="Medios de pago" icono={<Tag className="h-4 w-4" />}>

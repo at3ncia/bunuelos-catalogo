@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Instagram, Share2, UtensilsCrossed } from "lucide-react";
+import { Bike, Facebook, Globe, Instagram, MapPin, Music2, Phone, Share2, UtensilsCrossed } from "lucide-react";
+import { urlEnlace, type Enlace } from "@/lib/ajustes";
 import { useAppState } from "@/lib/app-store";
 import { leerCopia } from "@/lib/storage";
 import { listarPuntos, PUNTOS_RESPALDO, type PuntoPedido } from "@/lib/sedes";
@@ -28,6 +29,23 @@ function usePuntosEnlaces() {
   }, []);
   return puntos.filter((p) => p.en_enlaces !== false && p.activo !== false);
 }
+
+const ICONOS: Record<Enlace["icono"], (p: { className?: string }) => React.ReactNode> = {
+  web: (p) => <Globe {...p} />,
+  ubicacion: (p) => <MapPin {...p} />,
+  instagram: (p) => <Instagram {...p} />,
+  tiktok: (p) => <Music2 {...p} />,
+  facebook: (p) => <Facebook {...p} />,
+  whatsapp: (p) => <WhatsAppIcon {...p} />,
+  telefono: (p) => <Phone {...p} />,
+  moto: (p) => <Bike {...p} />,
+};
+
+const ESTILOS: Record<Enlace["estilo"], string> = {
+  naranja: "bg-[#D9731B] hover:bg-[#E37F25] text-white",
+  dorado: "btn-dorado",
+  blanco: "bg-white hover:bg-white/90 text-[#122a6b]",
+};
 
 function waUrl(phone: string, text: string) {
   return `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`;
@@ -70,9 +88,11 @@ function LinksPage() {
             alt="Los Buñuelos Los Originales"
             className="w-full max-w-sm h-auto drop-shadow-xl"
           />
+          {ajustes.bio && <p className="mt-4 max-w-xs text-white/90 text-balance whitespace-pre-line">{ajustes.bio}</p>}
         </header>
 
         <nav className="mt-8 space-y-4">
+          {ajustes.mostrar_boton_menu && (
           <a
             href="/?elegir"
             className="btn-dorado flex items-center gap-4 rounded-xl px-5 py-4 shadow-lg transition active:scale-[0.98] hover:brightness-105"
@@ -81,6 +101,7 @@ function LinksPage() {
             <span className="flex-1 text-center font-bold text-base sm:text-lg">{ajustes.boton_menu}</span>
             <span className="w-6 shrink-0" aria-hidden />
           </a>
+          )}
 
           {puntos.map((b) => (
             <a
@@ -97,6 +118,25 @@ function LinksPage() {
               <span className="w-6 shrink-0" aria-hidden />
             </a>
           ))}
+
+          {ajustes.enlaces
+            .filter((e) => e.activo && urlEnlace(e))
+            .map((e) => {
+              const Icono = ICONOS[e.icono];
+              return (
+                <a
+                  key={e.id}
+                  href={urlEnlace(e)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex items-center gap-4 rounded-xl px-5 py-4 shadow-lg transition active:scale-[0.98] ${ESTILOS[e.estilo]}`}
+                >
+                  <Icono className="h-6 w-6 shrink-0" />
+                  <span className="flex-1 text-center font-semibold text-base sm:text-lg">{e.texto || e.url}</span>
+                  <span className="w-6 shrink-0" aria-hidden />
+                </a>
+              );
+            })}
         </nav>
 
         {ajustes.instagram && (
