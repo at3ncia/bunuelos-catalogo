@@ -48,6 +48,7 @@ function CatalogPage() {
   }, []);
   const horario = estadoDomicilios(ajustes.horario_domicilios, ahora);
   const cart = useCart();
+  const [ultimo, setUltimo] = useState(() => leerLocal<{ items: { id: string; cantidad: number }[] }>(ULTIMO_PEDIDO));
   const [activeCat, setActiveCat] = useState<string>("todos");
   const [selected, setSelected] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
@@ -279,6 +280,42 @@ function CatalogPage() {
             </p>
           </div>
         )}
+        {/* Pedir de nuevo: el último pedido con lo que hay hoy */}
+        {(() => {
+          if (!ultimo?.items?.length || cart.count > 0) return null;
+          const repetibles = ultimo.items
+            .map((i) => ({ ...i, producto: state.productos.find((p) => p.id === i.id) }))
+            .filter(
+              (i): i is { id: string; cantidad: number; producto: Product } =>
+                !!i.producto && i.producto.disponible && (dispSede[i.id] ?? true) && visibleHoy(i.producto.dias, ahora),
+            );
+          if (!repetibles.length) return null;
+          const faltantes = ultimo.items.length - repetibles.length;
+          const totalUltimo = repetibles.reduce((t, i) => t + i.producto.precio * i.cantidad, 0);
+          return (
+            <div className="mb-5 rounded-2xl border-2 border-primary/20 bg-card shadow-card p-4 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tu último pedido</p>
+                <p className="text-sm font-semibold line-clamp-2">
+                  {repetibles.map((i) => `${i.cantidad}× ${i.producto.nombre}`).join(", ")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatCOP(totalUltimo)}
+                  {faltantes > 0 ? ` · ${faltantes} producto${faltantes > 1 ? "s" : ""} no está${faltantes > 1 ? "n" : ""} hoy` : ""}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  repetibles.forEach((i) => cart.add(i.producto, i.cantidad));
+                  setCartOpen(true);
+                }}
+                className="shrink-0 h-11 px-4 rounded-xl bg-[#D9731B] text-white font-bold shadow-card active:scale-95 transition"
+              >
+                Pedir de nuevo
+              </button>
+            </div>
+          );
+        })()}
         {state.fuente === "copia" && (
           <p className="mb-5 text-xs text-muted-foreground flex items-center gap-2">
             Mostrando el último menú guardado; puede no estar al día.
@@ -406,6 +443,7 @@ function CatalogPage() {
         sedeId={sedeId}
         puntoId={puntoActual?.id ?? null}
         onSent={() => {
+          setUltimo(leerLocal(ULTIMO_PEDIDO));
           cart.clear();
           setCheckoutOpen(false);
         }}
@@ -697,7 +735,21 @@ function CheckoutModal({
   const visibles = campos.filter((c) => c.activo && c.tipo !== "pedido");
   const iniciales = () =>
     Object.fromEntries(visibles.map((c) => [c.id, c.tipo === "opciones" ? (c.opciones?.[0] ?? "") : ""]));
-  const [valores, setValores] = useState<Record<string, string>>(iniciales);
+  // Datos del pedido anterior guardados en este celular: quien repite no vuelve a escribir nada
+  const conGuardados = () => {
+    const base = iniciales();
+    const guardados = leerLocal<Record<string, string>>(DATOS_CLIENTE) ?? {};
+    for (const c of visibles) {
+      const v = guardados[c.id];
+      if (typeof v !== "string") continue;
+      if (c.tipo === "opciones" && !(c.opciones ?? []).includes(v)) continue;
+      base[c.id] = v;
+      if (c.tipo === "barrio" && typeof guardados[`${c.id}__otro`] === "string") base[`${c.id}__otro`] = guardados[`${c.id}__otro`];
+    }
+    return base;
+  };
+  const [valores, setValores] = useState<Record<string, string>>(conGuardados);
+  const [hayGuardados, setHayGuardados] = useState(() => !!leerLocal(DATOS_CLIENTE));
   // Si cambian los campos (se recargó el menú), se completan los que falten
   useEffect(() => {
     setValores((v) => ({ ...iniciales(), ...v }));
@@ -713,7 +765,15 @@ function CheckoutModal({
   const hayBarrio = !!barrio || ((idBarrio === "__otro" || sinLista) && !!textoOtro.trim());
   const valorCampo = (c: CampoPedido) =>
     c.tipo === "barrio" ? (barrio ? barrio.nombre : textoOtro.trim()) : (valores[c.id] ?? "").trim();
-  const faltan = visibles.filter((c) => c.obligatorio && !valorCampo(c));
+  // Teléfono: celular de 10 dígitos (o fijo de 7); acepta espacios, guiones y +57
+  const telefonoInvalido = (c: CampoPedido) => {
+    if (c.tipo !== "telefono") return false;
+    const v = valorCampo(c);
+    if (!v) return false;
+    const d = v.replace(/\D/g, "").replace(/^57(?=\d{10}$)/, "");
+    return !(d.length === 10 || d.length === 7);
+  };
+  const faltan = visibles.filter((c) => (c.obligatorio && !valorCampo(c)) || telefonoInvalido(c));
   const total = subtotal + (domicilio ?? 0);
 
   const enviar = async () => {
@@ -739,11 +799,14 @@ function CheckoutModal({
       domicilio: campoBarrio && hayBarrio ? (domicilio === null ? "por confirmar" : formatCOP(domicilio)) : undefined,
     });
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
+    // Recordar para el próximo pedido (solo en este celular)
+    guardarLocal(DATOS_CLIENTE, valores);
+    guardarLocal(ULTIMO_PEDIDO, { items: items.map((i) => ({ id: i.product.id, cantidad: i.cantidad })), fecha: Date.now() });
+    setHayGuardados(true);
     if (ventana) ventana.location.href = url;
     else window.location.href = url;
     setEnviando(false);
     onSent();
-    setValores(iniciales());
   };
   const poner = (id: string, valor: string) => setValores((v) => ({ ...v, [id]: valor }));
 
@@ -835,7 +898,12 @@ function CheckoutModal({
                     inputMode={c.tipo === "telefono" ? "tel" : undefined}
                     autoComplete={c.tipo === "telefono" ? "tel" : c.id === "nombre" ? "name" : undefined}
                     maxLength={c.tipo === "telefono" ? 20 : 80}
+                    aria-invalid={telefonoInvalido(c) || undefined}
+                    className={telefonoInvalido(c) ? "border-destructive focus-visible:ring-destructive" : undefined}
                   />
+                )}
+                {telefonoInvalido(c) && (
+                  <p className="mt-1 text-xs font-medium text-destructive">Escribe los 10 dígitos del celular, ej: 300 123 4567</p>
                 )}
               </div>
             );
@@ -862,6 +930,23 @@ function CheckoutModal({
           </Button>
           {faltan.length > 0 && (
             <p className="text-xs text-center text-muted-foreground">Falta: {faltan.map((c) => c.etiqueta).join(", ")}</p>
+          )}
+          {hayGuardados && (
+            <p className="text-xs text-center text-muted-foreground">
+              Guardamos tus datos solo en este celular para tu próximo pedido.{" "}
+              <button
+                type="button"
+                className="font-semibold text-primary underline"
+                onClick={() => {
+                  borrarLocal(DATOS_CLIENTE);
+                  borrarLocal(ULTIMO_PEDIDO);
+                  setHayGuardados(false);
+                  setValores(iniciales());
+                }}
+              >
+                Borrar
+              </button>
+            </p>
           )}
         </div>
       </DialogContent>
@@ -1181,4 +1266,30 @@ function BuscadorBarrio({
       )}
     </div>
   );
+}
+
+// ── Recordar datos en este celular (nunca se envían a otro lado) ──
+const DATOS_CLIENTE = "datosCliente_v1";
+const ULTIMO_PEDIDO = "ultimoPedido_v1";
+function leerLocal<T>(clave: string): T | null {
+  try {
+    const v = localStorage.getItem(clave);
+    return v ? (JSON.parse(v) as T) : null;
+  } catch {
+    return null;
+  }
+}
+function guardarLocal(clave: string, valor: unknown) {
+  try {
+    localStorage.setItem(clave, JSON.stringify(valor));
+  } catch {
+    /* sin almacenamiento: solo no se recuerda */
+  }
+}
+function borrarLocal(clave: string) {
+  try {
+    localStorage.removeItem(clave);
+  } catch {
+    /* nada */
+  }
 }
