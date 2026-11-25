@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, listarPuntos, PUNTOS_RESPALDO, type Sede, type PuntoPedido } from "@/lib/sedes";
-import { MapPin, ChevronDown, Instagram, X } from "lucide-react";
+import { MapPin, ChevronDown, Instagram, X, Search } from "lucide-react";
 import { fechaColombia, listarBarrios, listarPromos, promoVigente, registrarPedido, type Barrio, type Promo } from "@/lib/negocio";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
@@ -776,32 +776,24 @@ function CheckoutModal({
               return (
                 <div key={c.id}>
                   {etiqueta}
-                  {!sinLista && (
-                    <select
-                      id={id}
-                      value={valores[c.id] ?? ""}
-                      onChange={(e) => poner(c.id, e.target.value)}
-                      className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">Elige tu barrio</option>
-                      {barrios.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.nombre} — {b.precio === null ? "domicilio por confirmar" : `domicilio ${formatCOP(b.precio)}`}
-                        </option>
-                      ))}
-                      <option value="__otro">Otro barrio (te confirmamos el precio)</option>
-                    </select>
-                  )}
-                  {(sinLista || idBarrio === "__otro") && (
-                    <Input
-                      className="mt-2"
-                      value={textoOtro}
-                      onChange={(e) => poner(`${c.id}__otro`, e.target.value)}
-                      placeholder="Escribe tu barrio"
-                      maxLength={80}
-                      aria-label="Nombre del barrio"
-                    />
-                  )}
+                  <BuscadorBarrio
+                    id={id}
+                    barrios={barrios}
+                    elegido={barrio}
+                    otro={idBarrio === "__otro" || sinLista ? textoOtro : ""}
+                    onElegir={(b) => {
+                      poner(c.id, b.id);
+                      poner(`${c.id}__otro`, "");
+                    }}
+                    onOtro={(texto) => {
+                      poner(c.id, "__otro");
+                      poner(`${c.id}__otro`, texto);
+                    }}
+                    onLimpiar={() => {
+                      poner(c.id, "");
+                      poner(`${c.id}__otro`, "");
+                    }}
+                  />
                 </div>
               );
             }
@@ -1063,6 +1055,130 @@ function PopupPromo({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Sin tildes ni mayúsculas: "pie de la popa" encuentra "Pie de la Popa", "getsemani" encuentra "Getsemaní"
+const normalizar = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+function BuscadorBarrio({
+  id,
+  barrios,
+  elegido,
+  otro,
+  onElegir,
+  onOtro,
+  onLimpiar,
+}: {
+  id: string;
+  barrios: Barrio[];
+  elegido: Barrio | null;
+  otro: string;
+  onElegir: (b: Barrio) => void;
+  onOtro: (texto: string) => void;
+  onLimpiar: () => void;
+}) {
+  const [busqueda, setBusqueda] = useState("");
+  const [abierto, setAbierto] = useState(false);
+
+  // Ya eligió: se muestra como tarjeta con opción de cambiar
+  if (elegido || otro) {
+    return (
+      <div className="mt-1 flex items-center gap-3 rounded-xl border-2 border-primary bg-primary/5 px-3 py-2.5">
+        <MapPin className="h-5 w-5 text-[#D9731B] shrink-0" />
+        <span className="flex-1 min-w-0">
+          <span className="block font-semibold truncate">{elegido ? elegido.nombre : otro}</span>
+          <span className="block text-xs text-muted-foreground">
+            {elegido && elegido.precio !== null ? `Domicilio ${formatCOP(elegido.precio)}` : "Domicilio por confirmar"}
+          </span>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            onLimpiar();
+            setBusqueda("");
+            setAbierto(true);
+          }}
+          className="text-sm font-semibold text-primary shrink-0"
+        >
+          Cambiar
+        </button>
+      </div>
+    );
+  }
+
+  const q = normalizar(busqueda);
+  const resultados = q
+    ? barrios
+        .filter((b) => normalizar(b.nombre).includes(q))
+        // primero los que empiezan con lo escrito
+        .sort((a, b) => Number(!normalizar(a.nombre).startsWith(q)) - Number(!normalizar(b.nombre).startsWith(q)))
+    : barrios;
+  const exacto = barrios.some((b) => normalizar(b.nombre) === q);
+
+  return (
+    <div className="mt-1 relative">
+      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+      <input
+        id={id}
+        value={busqueda}
+        onChange={(e) => {
+          setBusqueda(e.target.value);
+          setAbierto(true);
+        }}
+        onFocus={() => setAbierto(true)}
+        placeholder="Busca tu barrio"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={abierto}
+        aria-controls={`${id}-lista`}
+        className="w-full h-10 rounded-md border border-input bg-background pl-9 pr-3 text-base outline-none focus:ring-2 focus:ring-primary/40"
+      />
+      {abierto && (
+        <ul
+          id={`${id}-lista`}
+          role="listbox"
+          className="mt-1 max-h-56 overflow-y-auto rounded-xl border border-border bg-card shadow-card divide-y divide-border"
+        >
+          {resultados.slice(0, 40).map((b) => (
+            <li key={b.id} role="option" aria-selected={false}>
+              <button
+                type="button"
+                onClick={() => {
+                  onElegir(b);
+                  setAbierto(false);
+                }}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted active:bg-muted"
+              >
+                <span className="font-medium">{b.nombre}</span>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {b.precio === null ? "por confirmar" : formatCOP(b.precio)}
+                </span>
+              </button>
+            </li>
+          ))}
+          {q && !exacto && (
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onOtro(busqueda.trim());
+                  setAbierto(false);
+                }}
+                className="w-full px-3 py-2.5 text-left text-sm hover:bg-muted"
+              >
+                {resultados.length ? "¿No es ninguno? " : "No lo encontramos. "}
+                Usar <strong>«{busqueda.trim()}»</strong>
+                <span className="block text-xs text-muted-foreground">Te confirmamos el domicilio por WhatsApp</span>
+              </button>
+            </li>
+          )}
+          {!q && barrios.length === 0 && (
+            <li className="px-3 py-2.5 text-sm text-muted-foreground">Escribe tu barrio</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }
