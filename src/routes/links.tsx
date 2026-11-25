@@ -68,7 +68,7 @@ function LinksPage() {
             className="btn-dorado flex items-center gap-4 rounded-xl px-5 py-4 shadow-lg transition active:scale-[0.98] hover:brightness-105"
           >
             <UtensilsCrossed className="h-6 w-6 shrink-0" />
-            <span className="flex-1 text-center font-bold text-base sm:text-lg">Ver nuestro menú</span>
+            <span className="flex-1 text-center font-bold text-base sm:text-lg">Menú domicilios</span>
             <span className="w-6 shrink-0" aria-hidden />
           </a>
 

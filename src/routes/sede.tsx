@@ -23,6 +23,8 @@ import {
   setDisponibilidad,
   cambiarClaveSede,
   nombreCorto,
+  etiquetaSede,
+  esPorCiudad,
   SEDES_RESPALDO,
   type Sede,
 } from "@/lib/sedes";
@@ -149,11 +151,11 @@ function BandaMarca({ sesion, onSalir }: { sesion: Sesion | null; onSalir: () =>
               <p className="text-xs uppercase tracking-widest text-white/70">Gestionando</p>
               <h1 className="font-display text-2xl font-bold flex items-center justify-center gap-1.5">
                 <MapPin className="h-5 w-5 text-[#F3B15A]" />
-                {nombreCorto(sesion.sede)}, {sesion.sede.ciudad}
+                {etiquetaSede(sesion.sede)}
               </h1>
             </div>
           ) : (
-            <h1 className="mt-3 font-display text-2xl font-bold">Gestión de sede</h1>
+            <h1 className="mt-3 font-display text-2xl font-bold">Gestión de disponibilidad</h1>
           )}
         </div>
       </div>
@@ -170,6 +172,7 @@ function LoginSede({ sedes, onOk }: { sedes: Sede[]; onOk: (s: Sede, clave: stri
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
   const ciudades = Array.from(new Set(sedes.map((s) => s.ciudad)));
+  const porCiudad = esPorCiudad(sedes);
   const elegida = sedes.find((s) => s.id === sedeId) ?? null;
 
   const submit = async (e: React.FormEvent) => {
@@ -186,11 +189,18 @@ function LoginSede({ sedes, onOk }: { sedes: Sede[]; onOk: (s: Sede, clave: stri
   return (
     <form onSubmit={submit} className="space-y-4">
       <Tarjeta>
-        <Paso n={1} titulo="Elige tu sede" />
-        <div className="mt-4 space-y-5">
+        <Paso n={1} titulo={porCiudad ? "Elige tu ciudad" : "Elige tu sede"} />
+        {sedes.length === 0 && (
+          <div className="mt-4 flex items-center justify-center gap-2 py-6 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" /> Cargando…
+          </div>
+        )}
+        <div className={`mt-4 ${porCiudad ? "space-y-2" : "space-y-5"}`}>
           {ciudades.map((ciudad) => (
             <div key={ciudad}>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">{ciudad}</p>
+              {!porCiudad && (
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">{ciudad}</p>
+              )}
               <div className="grid gap-2">
                 {sedes
                   .filter((s) => s.ciudad === ciudad)
@@ -230,7 +240,7 @@ function LoginSede({ sedes, onOk }: { sedes: Sede[]; onOk: (s: Sede, clave: stri
       </Tarjeta>
 
       <Tarjeta className={elegida ? "" : "opacity-50"}>
-        <Paso n={2} titulo="Contraseña de la sede" />
+        <Paso n={2} titulo={porCiudad ? "Contraseña" : "Contraseña de la sede"} />
         <div className="mt-4 relative">
           <input
             type={ver ? "text" : "password"}
@@ -238,7 +248,7 @@ function LoginSede({ sedes, onOk }: { sedes: Sede[]; onOk: (s: Sede, clave: stri
             disabled={!elegida}
             value={clave}
             onChange={(e) => setClave(e.target.value)}
-            placeholder={elegida ? `Contraseña de ${nombreCorto(elegida)}` : "Primero elige una sede"}
+            placeholder={elegida ? `Contraseña de ${nombreCorto(elegida)}` : porCiudad ? "Primero elige tu ciudad" : "Primero elige una sede"}
             className="w-full h-12 rounded-xl border-2 border-border bg-background px-4 pr-12 text-base outline-none focus:border-primary transition disabled:cursor-not-allowed"
           />
           <button

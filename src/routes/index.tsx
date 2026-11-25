@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, type Sede } from "@/lib/sedes";
+import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, type Sede } from "@/lib/sedes";
 import { MapPin, ChevronDown } from "lucide-react";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
@@ -149,7 +149,7 @@ function CatalogPage() {
               className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-sm font-semibold hover:bg-primary/15 transition"
             >
               <MapPin className="h-4 w-4" />
-              Pidiendo en {nombreCorto(sedeActual)}, {sedeActual.ciudad}
+              Pidiendo en {etiquetaSede(sedeActual)}
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>
@@ -595,6 +595,7 @@ function SelectorSede({
   onCerrar: () => void;
 }) {
   const ciudades = Array.from(new Set(sedes.map((s) => s.ciudad)));
+  const porCiudad = esPorCiudad(sedes);
   return (
     <div
       role="dialog"
@@ -606,19 +607,21 @@ function SelectorSede({
         <div className="flex flex-col items-center text-center">
           <img src={LOGO_URL} alt="Los Buñuelos Los Originales" className="w-64 h-auto" />
           <h2 id="titulo-sede" className="mt-6 font-display text-2xl font-bold text-primary">
-            ¿A qué sede quieres pedir?
+            {porCiudad ? "¿Desde qué ciudad pides?" : "¿A qué sede quieres pedir?"}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">Te mostramos lo disponible en esa sede.</p>
+          <p className="text-sm text-muted-foreground mt-1">{porCiudad ? "Te mostramos lo disponible en tu ciudad." : "Te mostramos lo disponible en esa sede."}</p>
         </div>
 
-        <div className="mt-6 space-y-6">
+        <div className={`mt-6 ${porCiudad ? "space-y-3" : "space-y-6"}`}>
           {ciudades.map((ciudad) => {
             const lista = sedes.filter((s) => s.ciudad === ciudad);
             return (
               <section key={ciudad}>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                  {ciudad} · {lista.length} {lista.length === 1 ? "sede" : "sedes"}
-                </h3>
+                {!porCiudad && (
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                    {ciudad} · {lista.length} {lista.length === 1 ? "sede" : "sedes"}
+                  </h3>
+                )}
                 <div className="space-y-2">
                   {lista.map((s) => (
                     <button
@@ -634,7 +637,7 @@ function SelectorSede({
                         <MapPin className="h-5 w-5" />
                       </span>
                       <span className="min-w-0">
-                        <span className="block font-semibold">{nombreCorto(s)}</span>
+                        <span className="block font-semibold text-lg">{nombreCorto(s)}</span>
                         <span className="block text-xs text-muted-foreground">{s.direccion}</span>
                       </span>
                     </button>

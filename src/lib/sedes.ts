@@ -12,17 +12,27 @@ export type Sede = {
 
 type RpcResult = { ok: boolean; error?: string; id?: number; nombre?: string; ciudad?: string };
 
-// Respaldo por si Supabase no responde: mismos ids y números que la base de datos.
+// Respaldo por si Supabase no responde. Hoy se opera por ciudad (ver sql/005_por_ciudad.sql);
+// los ids coinciden con la base de datos.
 export const SEDES_RESPALDO: Sede[] = [
-  { id: 1, nombre: "Cartagena · Terminal", ciudad: "Cartagena", direccion: "Terminal de transporte", whatsapp: "573013416503", activa: true },
-  { id: 2, nombre: "Cartagena · Castellana", ciudad: "Cartagena", direccion: "Castellana, frente a estación Trans", whatsapp: "573013416503", activa: true },
-  { id: 3, nombre: "Cartagena · Bocagrande", ciudad: "Cartagena", direccion: "Bocagrande, Cra 2 Calle 4", whatsapp: "573226768027", activa: true },
-  { id: 4, nombre: "Barranquilla · Centro", ciudad: "Barranquilla", direccion: "Centro, Calle 38 No 38-10", whatsapp: "573106107552", activa: true },
+  { id: 1, nombre: "Cartagena", ciudad: "Cartagena", direccion: "Terminal · Castellana · Bocagrande", whatsapp: "573013416503", activa: true },
+  { id: 4, nombre: "Barranquilla", ciudad: "Barranquilla", direccion: "Centro, Calle 38 No 38-10", whatsapp: "573106107552", activa: true },
 ];
 
 // Nombre corto para mostrar: "Cartagena · Terminal" -> "Terminal"
 export function nombreCorto(s: Sede) {
   return s.nombre.split("·").pop()!.trim();
+}
+
+// Etiqueta completa sin repetir: "Terminal, Cartagena" o solo "Cartagena"
+export function etiquetaSede(s: Sede) {
+  const corto = nombreCorto(s);
+  return corto === s.ciudad ? s.ciudad : `${corto}, ${s.ciudad}`;
+}
+
+// true cuando hay una sola sede por ciudad: se elige la ciudad, no la sede
+export function esPorCiudad(sedes: Sede[]) {
+  return new Set(sedes.map((s) => s.ciudad)).size === sedes.length;
 }
 
 export async function listarSedes(): Promise<Sede[]> {
