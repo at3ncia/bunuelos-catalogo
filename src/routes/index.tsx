@@ -761,7 +761,8 @@ function CheckoutModal({
   const barrio = barrios.find((b) => b.id === idBarrio) ?? null;
   const textoOtro = campoBarrio ? (valores[`${campoBarrio.id}__otro`] ?? "") : "";
   const sinLista = !!campoBarrio && barrios.length === 0;
-  const domicilio = barrio?.precio ?? null; // null = por confirmar
+  // El cliente nunca ve el valor del domicilio (lo calcula la base de datos al registrar)
+  const domicilio = null;
   const hayBarrio = !!barrio || ((idBarrio === "__otro" || sinLista) && !!textoOtro.trim());
   const valorCampo = (c: CampoPedido) =>
     c.tipo === "barrio" ? (barrio ? barrio.nombre : textoOtro.trim()) : (valores[c.id] ?? "").trim();
@@ -796,7 +797,7 @@ function CheckoutModal({
       .join("\n");
     const msg = mensajePedido(saludo, campos, legibles, detalle, formatCOP(total), {
       codigo: registro?.codigo,
-      domicilio: campoBarrio && hayBarrio ? (domicilio === null ? "por confirmar" : formatCOP(domicilio)) : undefined,
+      domicilio: campoBarrio && hayBarrio ? "por confirmar" : undefined,
     });
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     // Recordar para el próximo pedido (solo en este celular)
@@ -913,10 +914,10 @@ function CheckoutModal({
               <div className="flex justify-between"><dt>Productos</dt><dd>{formatCOP(subtotal)}</dd></div>
               <div className="flex justify-between">
                 <dt>Domicilio{barrio ? ` (${barrio.nombre})` : ""}</dt>
-                <dd>{domicilio === null ? "Por confirmar" : formatCOP(domicilio)}</dd>
+                <dd>Te lo confirmamos</dd>
               </div>
               <div className="flex justify-between font-display font-bold text-primary text-base pt-1 border-t border-border">
-                <dt>Total</dt><dd>{formatCOP(total)}{domicilio === null ? " + domicilio" : ""}</dd>
+                <dt>Total</dt><dd>{formatCOP(total)} + domicilio</dd>
               </div>
             </dl>
           )}
@@ -1174,9 +1175,7 @@ function BuscadorBarrio({
         <MapPin className="h-5 w-5 text-[#D9731B] shrink-0" />
         <span className="flex-1 min-w-0">
           <span className="block font-semibold truncate">{elegido ? elegido.nombre : otro}</span>
-          <span className="block text-xs text-muted-foreground">
-            {elegido && elegido.precio !== null ? `Domicilio ${formatCOP(elegido.precio)}` : "Domicilio por confirmar"}
-          </span>
+          <span className="block text-xs text-muted-foreground">Te confirmamos el valor del domicilio por WhatsApp</span>
         </span>
         <button
           type="button"
@@ -1237,9 +1236,6 @@ function BuscadorBarrio({
                 className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-muted active:bg-muted"
               >
                 <span className="font-medium">{b.nombre}</span>
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {b.precio === null ? "por confirmar" : formatCOP(b.precio)}
-                </span>
               </button>
             </li>
           ))}
@@ -1255,7 +1251,7 @@ function BuscadorBarrio({
               >
                 {resultados.length ? "¿No es ninguno? " : "No lo encontramos. "}
                 Usar <strong>«{busqueda.trim()}»</strong>
-                <span className="block text-xs text-muted-foreground">Te confirmamos el domicilio por WhatsApp</span>
+                <span className="block text-xs text-muted-foreground">Te confirmamos el valor del domicilio por WhatsApp</span>
               </button>
             </li>
           )}

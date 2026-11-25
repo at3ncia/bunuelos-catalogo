@@ -40,13 +40,17 @@ export type Pedido = {
 
 // ── Lectura pública (con respaldo de la última carga buena) ─────────────────
 
+// Barrios para el cliente: solo nombres, sin precio de domicilio (sql/010).
+// Si aún no existe la vista, se lee la tabla sin la columna de precio.
 export async function listarBarrios(): Promise<Barrio[]> {
-  const lista = await cargarConRespaldo<Barrio>(
-    "bunuelos_barrios_v1",
-    supabase.from("barrios").select("*").order("nombre"),
-    [],
-  );
-  return lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+  const vista = await supabase.from("barrios_publicos").select("id, sede_id, nombre").order("nombre");
+  const consulta = vista.error
+    ? supabase.from("barrios").select("id, sede_id, nombre").eq("activo", true).order("nombre")
+    : Promise.resolve(vista);
+  const lista = await cargarConRespaldo<Barrio>("bunuelos_barrios_v2", consulta, []);
+  return lista
+    .map((b) => ({ ...b, precio: null, activo: true }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 }
 
 export function listarPromos(): Promise<Promo[]> {
