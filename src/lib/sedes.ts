@@ -12,12 +12,27 @@ export type Sede = {
 
 type RpcResult = { ok: boolean; error?: string; id?: number; nombre?: string; ciudad?: string };
 
+// Respaldo por si Supabase no responde: mismos ids y números que la base de datos.
+export const SEDES_RESPALDO: Sede[] = [
+  { id: 1, nombre: "Cartagena · Terminal", ciudad: "Cartagena", direccion: "Terminal de transporte", whatsapp: "573013416503", activa: true },
+  { id: 2, nombre: "Cartagena · Castellana", ciudad: "Cartagena", direccion: "Castellana, frente a estación Trans", whatsapp: "573013416503", activa: true },
+  { id: 3, nombre: "Cartagena · Bocagrande", ciudad: "Cartagena", direccion: "Bocagrande, Cra 2 Calle 4", whatsapp: "573226768027", activa: true },
+  { id: 4, nombre: "Barranquilla · Centro", ciudad: "Barranquilla", direccion: "Centro, Calle 38 No 38-10", whatsapp: "573106107552", activa: true },
+];
+
+// Nombre corto para mostrar: "Cartagena · Terminal" -> "Terminal"
+export function nombreCorto(s: Sede) {
+  return s.nombre.split("·").pop()!.trim();
+}
+
 export async function listarSedes(): Promise<Sede[]> {
-  const { data, error } = await supabase
-    .from("sedes_publicas")
-    .select("*")
-    .eq("activa", true)
-    .order("id");
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Tiempo de espera agotado")), 6000),
+  );
+  const { data, error } = await Promise.race([
+    supabase.from("sedes_publicas").select("*").eq("activa", true).order("id"),
+    timeout,
+  ]);
   if (error) throw new Error(error.message);
   return (data ?? []) as Sede[];
 }

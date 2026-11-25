@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { listarSedes, disponibilidadSede, type Sede } from "@/lib/sedes";
+import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, type Sede } from "@/lib/sedes";
+import { MapPin, ChevronDown } from "lucide-react";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
@@ -48,14 +49,18 @@ function CatalogPage() {
   });
   const [dispSede, setDispSede] = useState<Record<string, boolean>>({});
 
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
+
   useEffect(() => {
     listarSedes()
-      .then((lista) => {
-        setSedes(lista);
-        setSedeId((actual) => actual ?? lista[0]?.id ?? null);
-      })
-      .catch(() => {});
+      .then((lista) => setSedes(lista.length ? lista : SEDES_RESPALDO))
+      .catch(() => setSedes(SEDES_RESPALDO));
   }, []);
+
+  // Si la sede guardada ya no existe, se vuelve a preguntar
+  useEffect(() => {
+    if (sedes.length && sedeId && !sedes.some((s) => s.id === sedeId)) setSedeId(null);
+  }, [sedes, sedeId]);
 
   useEffect(() => {
     if (!sedeId) return;
@@ -136,17 +141,17 @@ function CatalogPage() {
           </Sheet>
         </div>
 
-        {/* Selector de sede */}
-        {sedes.length > 0 && (
-          <div className="max-w-5xl mx-auto px-4 pb-2 overflow-x-auto">
-            <div className="flex gap-2 min-w-max items-center">
-              <span className="text-xs text-muted-foreground mr-1">Sede:</span>
-              {sedes.map((s) => (
-                <CategoryPill key={s.id} active={sedeId === s.id} onClick={() => setSedeId(s.id)}>
-                  {s.nombre.replace("Cartagena · ", "").replace("Barranquilla · ", "")}
-                </CategoryPill>
-              ))}
-            </div>
+        {/* Sede elegida (toca para cambiar) */}
+        {sedeActual && (
+          <div className="max-w-5xl mx-auto px-4 pb-2">
+            <button
+              onClick={() => setSelectorAbierto(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-sm font-semibold hover:bg-primary/15 transition"
+            >
+              <MapPin className="h-4 w-4" />
+              Pidiendo en {nombreCorto(sedeActual)}, {sedeActual.ciudad}
+              <ChevronDown className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -189,6 +194,19 @@ function CatalogPage() {
           </div>
         )}
       </main>
+
+      {sedes.length > 0 && (!sedeId || selectorAbierto) && (
+        <SelectorSede
+          sedes={sedes}
+          actual={sedeId}
+          puedeCerrar={!!sedeId}
+          onElegir={(id) => {
+            setSedeId(id);
+            setSelectorAbierto(false);
+          }}
+          onCerrar={() => setSelectorAbierto(false)}
+        />
+      )}
 
       {/* Floating cart button (mobile) */}
       {cart.count > 0 && (
@@ -560,5 +578,79 @@ Total: ${formatCOP(subtotal)}`;
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SelectorSede({
+  sedes,
+  actual,
+  puedeCerrar,
+  onElegir,
+  onCerrar,
+}: {
+  sedes: Sede[];
+  actual: number | null;
+  puedeCerrar: boolean;
+  onElegir: (id: number) => void;
+  onCerrar: () => void;
+}) {
+  const ciudades = Array.from(new Set(sedes.map((s) => s.ciudad)));
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="titulo-sede"
+      className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm overflow-y-auto"
+    >
+      <div className="min-h-full max-w-md mx-auto px-4 py-8 flex flex-col">
+        <div className="flex flex-col items-center text-center">
+          <img src={LOGO_URL} alt="Los Buñuelos Los Originales" className="w-64 h-auto" />
+          <h2 id="titulo-sede" className="mt-6 font-display text-2xl font-bold text-primary">
+            ¿A qué sede quieres pedir?
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">Te mostramos lo disponible en esa sede.</p>
+        </div>
+
+        <div className="mt-6 space-y-6">
+          {ciudades.map((ciudad) => {
+            const lista = sedes.filter((s) => s.ciudad === ciudad);
+            return (
+              <section key={ciudad}>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                  {ciudad} · {lista.length} {lista.length === 1 ? "sede" : "sedes"}
+                </h3>
+                <div className="space-y-2">
+                  {lista.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => onElegir(s.id)}
+                      className={`w-full text-left rounded-2xl border p-4 flex items-center gap-3 transition shadow-soft ${
+                        actual === s.id
+                          ? "border-primary bg-primary/5"
+                          : "border-border bg-card hover:border-primary/50"
+                      }`}
+                    >
+                      <span className="h-10 w-10 shrink-0 rounded-full bg-secondary/20 text-secondary flex items-center justify-center">
+                        <MapPin className="h-5 w-5" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold">{nombreCorto(s)}</span>
+                        <span className="block text-xs text-muted-foreground">{s.direccion}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        {puedeCerrar && (
+          <button onClick={onCerrar} className="mt-6 text-sm text-muted-foreground underline underline-offset-4">
+            Cancelar
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
