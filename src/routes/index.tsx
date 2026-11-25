@@ -102,7 +102,7 @@ function CatalogPage() {
           <img src={logoUrl} alt={state.config.nombre} className="h-12 sm:h-14 w-auto" />
           <div className="flex-1" />
           <Link
-            to="/admin"
+            to="/sede"
             aria-label="Admin"
             className="p-2 rounded-full text-muted-foreground hover:text-primary hover:bg-muted transition"
           >

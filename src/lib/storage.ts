@@ -74,7 +74,7 @@ export const DEFAULT_STATE: AppState = {
       disponible: true,
     },
   ],
-  adminAuth: { user: "admin", pass: "bunuelos2025" },
+  adminAuth: { user: "", pass: "" },
   adminSession: false,
 };
 
