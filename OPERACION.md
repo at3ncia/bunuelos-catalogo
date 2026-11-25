@@ -8,10 +8,14 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 |---|---|---|
 | `/` | Clientes | Ver el menú y pedir por WhatsApp |
 | `/links` | Clientes (bio de Instagram, QR) | Botones de WhatsApp y acceso al menú |
-| `/sede` | Encargado de cada ciudad | Marcar lo que **se acabó hoy** |
+| `/sede` | Encargado de cada ciudad | Interruptor **Hay / No hay** y **confirmar pedidos** de su ciudad |
 | `/admin` | Dueño | Productos, precios, categorías, WhatsApp, horarios, claves |
 
 ## Qué se cambia desde `/admin` (sin pedir cambios de código)
+
+- **Pedidos:** cada pedido enviado desde el catálogo queda registrado con su código (ej. `CAR-04821`, también va en el mensaje de WhatsApp), todos los datos del formulario, barrio y domicilio. Se confirman o cancelan a mano aquí o en `/sede`. Resumen de ventas confirmadas de hoy, 7 y 30 días.
+- **Promos:** ventanas emergentes verticales 3:4 (ideal 1080 × 1440) al abrir el menú. Imagen, producto que lleva (el botón lo agrega al pedido), días de la semana y fechas desde/hasta. Cada cliente la ve una vez al día.
+- **Domicilios:** precio del domicilio por barrio en Cartagena y Barranquilla. Lista inicial de barrios cargada; "Precio rápido" llena todos los que no tienen precio y luego se ajustan los distintos. También se puede pegar una lista ("Manga, 5000"). Barrio sin precio = "por confirmar".
 
 - **Productos:** crear, editar precio, nombre y descripción, ocultar o borrar.
 - **Fotos:** en cada producto, "Subir foto" desde el celular (cámara o galería) o el computador. Se comprime sola (~100-200 KB).
@@ -51,6 +55,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 7. `sql/006_puntos_pedido.sql` — puntos de pedido con su WhatsApp
 8. `sql/007_panel_negocio.sql` — panel del dueño y ajustes editables
 9. `sql/008_fotos.sql` — subir fotos de productos desde el panel
+10. `sql/009_pedidos_promos_domicilios.sql` — pedidos, promos y domicilio por barrio
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 
@@ -59,3 +64,10 @@ update config set clave_admin_hash = crypt('TU_CLAVE_AQUI', gen_salt('bf')) wher
 ```
 
 Reglas de contraseñas: mínimo 8 caracteres, solo letras y números, al menos una mayúscula y un número.
+
+## Pagos en línea (Bold u otro) — preparado, pendiente de conectar
+
+La tabla `pedidos` ya tiene `pago_proveedor` y `pago_referencia`. Para que un pago confirme el pedido solo:
+1. Crear cuenta y llaves en Bold.
+2. Crear una función (Supabase Edge Function o Netlify Function) que reciba el *webhook* de Bold, verifique su firma y marque el pedido como `confirmado` con `confirmado_por = 'bold'`.
+3. Agregar el botón "Pagar con Bold" en el formulario del pedido usando el código del pedido como referencia.

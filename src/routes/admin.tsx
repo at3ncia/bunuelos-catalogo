@@ -15,6 +15,9 @@ import {
   LogOut,
   Plus,
   Search,
+  Bike,
+  ClipboardList,
+  Megaphone,
   Settings2,
   Store,
   Tag,
@@ -54,6 +57,20 @@ import {
 } from "@/lib/admin";
 import { colorCategoria, FotoProducto } from "@/components/foto-producto";
 import { subirFoto } from "@/lib/fotos";
+import { ListaPedidos } from "@/components/lista-pedidos";
+import {
+  borrarBarrio,
+  borrarPromo,
+  cambiarEstadoPedido,
+  guardarBarrios,
+  guardarPromo,
+  listarBarriosAdmin,
+  listarPedidosAdmin,
+  listarPromosAdmin,
+  promoVigente,
+  type Barrio,
+  type Promo,
+} from "@/lib/negocio";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
@@ -70,7 +87,7 @@ export const Route = createFileRoute("/admin")({
 // La sesión del dueño dura mientras la pestaña esté abierta
 const CLAVE_SESION = "sesionAdmin";
 
-type Pestana = "productos" | "categorias" | "whatsapp" | "ajustes" | "seguridad";
+type Pestana = "pedidos" | "productos" | "promos" | "domicilios" | "categorias" | "whatsapp" | "ajustes" | "seguridad";
 type Aviso = { tipo: "ok" | "err"; texto: string } | null;
 
 const INPUT =
@@ -210,7 +227,7 @@ function Panel({
   onClaveCambiada: (c: string) => void;
   onSalir: () => void;
 }) {
-  const [pestana, setPestana] = useState<Pestana>("productos");
+  const [pestana, setPestana] = useState<Pestana>("pedidos");
   const [datos, setDatos] = useState<DatosPanel | null>(null);
   const [errorCarga, setErrorCarga] = useState("");
   const [aviso, setAviso] = useState<Aviso>(null);
@@ -247,7 +264,10 @@ function Panel({
   };
 
   const pestanas: [Pestana, string, typeof Store][] = [
+    ["pedidos", "Pedidos", ClipboardList],
     ["productos", "Productos", Store],
+    ["promos", "Promos", Megaphone],
+    ["domicilios", "Domicilios", Bike],
     ["categorias", "Categorías", Tag],
     ["whatsapp", "Links", Store],
     ["ajustes", "Ajustes", Settings2],
@@ -256,7 +276,7 @@ function Panel({
 
   return (
     <div className="space-y-4">
-      <nav className="bg-card border border-border rounded-2xl shadow-card p-1.5 grid grid-cols-5 gap-1">
+      <nav className="bg-card border border-border rounded-2xl shadow-card p-1.5 grid grid-cols-4 gap-1">
         {pestanas.map(([id, texto, Icono]) => (
           <button
             key={id}
@@ -284,6 +304,16 @@ function Panel({
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         )
+      ) : pestana === "pedidos" ? (
+        <ListaPedidos
+          sedes={datos.sedes}
+          cargar={(dias) => listarPedidosAdmin(clave, dias)}
+          cambiarEstado={(id, estado) => cambiarEstadoPedido({ admin: clave }, id, estado)}
+        />
+      ) : pestana === "promos" ? (
+        <PestanaPromos datos={datos} clave={clave} ejecutar={ejecutar} />
+      ) : pestana === "domicilios" ? (
+        <PestanaDomicilios datos={datos} clave={clave} ejecutar={ejecutar} />
       ) : pestana === "productos" ? (
         <PestanaProductos datos={datos} clave={clave} ejecutar={ejecutar} />
       ) : pestana === "categorias" ? (
@@ -637,6 +667,435 @@ function SelectorFoto({
       {verEnlace && (
         <input className={INPUT} value={producto.foto} onChange={(e) => onCambiar(e.target.value.trim())} placeholder="https://…" />
       )}
+    </div>
+  );
+}
+
+/* ── Promos (pop-up 3:4 programado) ──────────────────────────────────────── */
+
+const PROMO_NUEVA = (): Promo => ({
+  id: `promo-${uid().slice(0, 6)}`,
+  titulo: "",
+  imagen: "",
+  producto_id: null,
+  boton_texto: "Lo quiero",
+  dias: null,
+  desde: null,
+  hasta: null,
+  activo: true,
+  orden: 0,
+});
+
+function resumenPromo(p: Promo) {
+  const partes: string[] = [];
+  partes.push(p.dias?.length ? `Solo ${etiquetaDias(p.dias).toLowerCase()}` : "Todos los días");
+  const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+  if (p.desde && p.hasta) partes.push(`del ${f(p.desde)} al ${f(p.hasta)}`);
+  else if (p.desde) partes.push(`desde el ${f(p.desde)}`);
+  else if (p.hasta) partes.push(`hasta el ${f(p.hasta)}`);
+  return partes.join(" · ");
+}
+
+function PestanaPromos({ datos, clave, ejecutar }: PropsPestana) {
+  const [promos, setPromos] = useState<Promo[] | null>(null);
+  const [editando, setEditando] = useState<Promo | null>(null);
+  const [error, setError] = useState("");
+  const cargar = async () => {
+    const r = await listarPromosAdmin(clave);
+    if (r.ok) setPromos((r as { promos?: Promo[] }).promos ?? []);
+    else setError(r.error ?? "No se pudieron cargar las promos");
+  };
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <Tarjeta>
+        <p className="text-sm text-muted-foreground">
+          Las promos salen como ventana emergente al abrir el menú, una vez al día por cliente. Programa los días y las
+          fechas: por ejemplo, el 2x1 solo los martes. Imagen vertical 3:4 (ideal 1080 × 1440).
+        </p>
+      </Tarjeta>
+      {error && <p role="alert" className="rounded-xl bg-destructive/10 text-destructive text-sm px-4 py-3">{error}</p>}
+      {promos === null && !error ? (
+        <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : (
+        <ul className="space-y-2">
+          {(promos ?? []).map((p) => {
+            const hoy = promoVigente(p);
+            const producto = datos.productos.find((x) => x.id === p.producto_id);
+            return (
+              <li key={p.id}>
+                <button onClick={() => setEditando(p)} className="w-full bg-card border border-border rounded-2xl shadow-card p-3 flex gap-3 text-left">
+                  <span className="h-24 aspect-[3/4] shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center">
+                    {p.imagen ? <img src={p.imagen} alt="" className="w-full h-full object-cover" /> : <Camera className="h-6 w-6 text-muted-foreground" />}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block font-display font-bold text-primary truncate">{p.titulo || "Promo sin título"}</span>
+                    <span className="block text-xs text-muted-foreground">{resumenPromo(p)}</span>
+                    {producto && <span className="block text-xs mt-1">Producto: {producto.nombre}</span>}
+                    <span className="mt-1.5 inline-flex">
+                      {!p.activo ? <Etiqueta tono="gris">Apagada</Etiqueta> : hoy ? <Etiqueta tono="azul">Sale hoy</Etiqueta> : <Etiqueta tono="naranja">Programada</Etiqueta>}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <button
+        onClick={() => setEditando(PROMO_NUEVA())}
+        className="w-full h-12 rounded-xl bg-[#D9731B] text-white font-bold inline-flex items-center justify-center gap-2 shadow-card"
+      >
+        <Plus className="h-5 w-5" /> Nueva promo
+      </button>
+
+      <EditorPromo
+        promo={editando}
+        clave={clave}
+        productos={datos.productos}
+        onCerrar={() => setEditando(null)}
+        onGuardar={async (p) => {
+          const ok = await ejecutar(guardarPromo(clave, p), "Promo guardada");
+          if (ok) {
+            setEditando(null);
+            cargar();
+          }
+        }}
+        onBorrar={async (p) => {
+          const ok = await ejecutar(borrarPromo(clave, p.id), "Promo borrada");
+          if (ok) {
+            setEditando(null);
+            cargar();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+function EditorPromo({
+  promo,
+  clave,
+  productos,
+  onCerrar,
+  onGuardar,
+  onBorrar,
+}: {
+  promo: Promo | null;
+  clave: string;
+  productos: Product[];
+  onCerrar: () => void;
+  onGuardar: (p: Promo) => Promise<void>;
+  onBorrar: (p: Promo) => Promise<void>;
+}) {
+  const [p, setP] = useState<Promo | null>(promo);
+  const [subiendo, setSubiendo] = useState(false);
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const [confirmarBorrar, setConfirmarBorrar] = useState(false);
+  useEffect(() => {
+    setP(promo);
+    setError("");
+    setConfirmarBorrar(false);
+  }, [promo]);
+  if (!p) return null;
+  const cambiar = (c: Partial<Promo>) => setP({ ...p, ...c });
+  const subir = async (archivo: File | undefined) => {
+    if (!archivo) return;
+    setSubiendo(true);
+    setError("");
+    const r = await subirFoto(clave, p.id, archivo);
+    setSubiendo(false);
+    if (r.ok) cambiar({ imagen: r.url });
+    else setError(r.error);
+  };
+
+  return (
+    <Dialog open={!!promo} onOpenChange={(o) => !o && onCerrar()}>
+      <DialogContent className="max-w-lg max-h-[calc(100dvh-7rem)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl">{p.titulo ? "Editar promo" : "Nueva promo"}</DialogTitle>
+          <DialogDescription>Ventana emergente vertical (3:4) al abrir el menú.</DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setGuardando(true);
+            await onGuardar(p);
+            setGuardando(false);
+          }}
+          className="space-y-4"
+        >
+          <div className="flex gap-3 items-start">
+            <div className="relative w-32 aspect-[3/4] shrink-0 rounded-xl overflow-hidden bg-muted border border-border flex items-center justify-center">
+              {p.imagen ? <img src={p.imagen} alt="" className="w-full h-full object-cover" /> : <Camera className="h-8 w-8 text-muted-foreground" />}
+              {subiendo && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <label className={`flex h-11 items-center justify-center gap-2 rounded-xl bg-[#D9731B] text-white font-bold cursor-pointer ${subiendo ? "opacity-50 pointer-events-none" : ""}`}>
+                <Camera className="h-5 w-5" /> {p.imagen ? "Cambiar imagen" : "Subir imagen"}
+                <input type="file" accept="image/*" className="sr-only" onChange={(e) => { subir(e.target.files?.[0]); e.target.value = ""; }} />
+              </label>
+              <p className="text-xs text-muted-foreground">Vertical 3:4. Lo que quede fuera de ese formato se recorta.</p>
+            </div>
+          </div>
+          {error && <p role="alert" className="rounded-lg bg-destructive/10 text-destructive text-sm px-3 py-2">{error}</p>}
+
+          <Campo etiqueta="Título (interno)" ayuda="Para reconocerla en el panel; no se muestra al cliente.">
+            <input className={INPUT} value={p.titulo} onChange={(e) => cambiar({ titulo: e.target.value })} placeholder="Martes 2x1" maxLength={60} />
+          </Campo>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Campo etiqueta="Producto que lleva" ayuda="El botón lo agrega al pedido. Sin producto, solo cierra.">
+              <select className={INPUT} value={p.producto_id ?? ""} onChange={(e) => cambiar({ producto_id: e.target.value || null })}>
+                <option value="">Ninguno</option>
+                {productos.map((x) => (
+                  <option key={x.id} value={x.id}>{x.nombre} · {formatCOP(x.precio)}</option>
+                ))}
+              </select>
+            </Campo>
+            <Campo etiqueta="Texto del botón">
+              <input className={INPUT} value={p.boton_texto} onChange={(e) => cambiar({ boton_texto: e.target.value })} maxLength={30} />
+            </Campo>
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-sm font-semibold">Días en que sale</span>
+            <SelectorDias dias={p.dias ?? []} onCambiar={(d) => cambiar({ dias: d.length ? d : null })} />
+            <p className="text-xs text-muted-foreground">{p.dias?.length ? `Solo ${etiquetaDias(p.dias).toLowerCase()}.` : "Sin días marcados sale todos los días."}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Campo etiqueta="Desde (opcional)">
+              <input type="date" className={INPUT} value={p.desde ?? ""} onChange={(e) => cambiar({ desde: e.target.value || null })} />
+            </Campo>
+            <Campo etiqueta="Hasta (opcional)">
+              <input type="date" className={INPUT} value={p.hasta ?? ""} onChange={(e) => cambiar({ hasta: e.target.value || null })} />
+            </Campo>
+          </div>
+          <Interruptor activo={p.activo} onCambiar={(v) => cambiar({ activo: v })} titulo="Encendida" detalle="Apágala para pausarla sin borrarla." />
+
+          <div className="flex items-center gap-2 pt-2">
+            {promo?.titulo !== undefined && (confirmarBorrar ? (
+              <button type="button" onClick={() => onBorrar(p)} className="h-12 rounded-xl bg-destructive text-white font-bold px-4">Sí, borrar</button>
+            ) : (
+              <button type="button" onClick={() => setConfirmarBorrar(true)} aria-label="Borrar promo" className="h-12 w-12 rounded-xl border-2 border-border text-destructive flex items-center justify-center">
+                <Trash2 className="h-5 w-5" />
+              </button>
+            ))}
+            <button
+              type="submit"
+              disabled={guardando || subiendo || !p.imagen}
+              className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {p.imagen ? "Guardar promo" : "Sube una imagen para guardar"}
+            </button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Domicilios por barrio ──────────────────────────────────────────────── */
+
+function PestanaDomicilios({ datos, clave, ejecutar }: PropsPestana) {
+  const [original, setOriginal] = useState<Barrio[] | null>(null);
+  const [barrios, setBarrios] = useState<Barrio[]>([]);
+  const [sedeId, setSedeId] = useState<number>(datos.sedes[0]?.id ?? 0);
+  const [buscar, setBuscar] = useState("");
+  const [nuevo, setNuevo] = useState("");
+  const [precioMasivo, setPrecioMasivo] = useState("");
+  const [pegar, setPegar] = useState("");
+  const [verPegar, setVerPegar] = useState(false);
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  const cargar = async () => {
+    const r = await listarBarriosAdmin(clave);
+    if (!r.ok) return setError(r.error ?? "No se pudieron cargar los barrios");
+    const lista = ((r as { barrios?: Barrio[] }).barrios ?? []).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    setOriginal(lista);
+    setBarrios(lista);
+  };
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const deCiudad = barrios.filter((b) => b.sede_id === sedeId);
+  const q = buscar.trim().toLowerCase();
+  const visibles = deCiudad.filter((b) => !q || b.nombre.toLowerCase().includes(q));
+  const sinPrecio = deCiudad.filter((b) => b.activo && b.precio === null).length;
+  const cambiados = barrios.filter((b) => JSON.stringify(b) !== JSON.stringify(original?.find((o) => o.id === b.id)));
+  const poner = (id: string, c: Partial<Barrio>) => setBarrios((l) => l.map((b) => (b.id === id ? { ...b, ...c } : b)));
+  const prefijo = (datos.sedes.find((s) => s.id === sedeId)?.ciudad ?? "bar").slice(0, 3).toLowerCase();
+  const agregar = (nombre: string, precio: number | null) => {
+    const id = `${prefijo}-${slug(nombre)}`;
+    setBarrios((l) =>
+      l.some((b) => b.id === id)
+        ? l.map((b) => (b.id === id ? { ...b, precio: precio ?? b.precio, activo: true } : b))
+        : [...l, { id, sede_id: sedeId, nombre, precio, activo: true }].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <Tarjeta>
+        <p className="text-sm text-muted-foreground">
+          El cliente elige su barrio al pedir y ve el valor del domicilio. Barrio sin precio = "por confirmar" (igual
+          puede pedir). Oculta los barrios a los que no llegan.
+        </p>
+      </Tarjeta>
+      <div className="grid grid-cols-2 gap-1 bg-card border border-border rounded-xl p-1">
+        {datos.sedes.map((s) => (
+          <button
+            key={s.id}
+            onClick={() => setSedeId(s.id)}
+            aria-pressed={sedeId === s.id}
+            className={`h-10 rounded-lg font-semibold ${sedeId === s.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          >
+            {etiquetaSede(s)}
+          </button>
+        ))}
+      </div>
+      {error && <p role="alert" className="rounded-xl bg-destructive/10 text-destructive text-sm px-4 py-3">{error}</p>}
+
+      <Tarjeta titulo="Precio rápido" icono={<Bike className="h-4 w-4" />}>
+        <p className="text-xs text-muted-foreground">
+          {sinPrecio ? `${sinPrecio} barrios activos sin precio.` : "Todos los barrios activos tienen precio."} Pon un valor y
+          aplícalo a todos los que no tienen precio; luego ajusta los que cuesten distinto.
+        </p>
+        <div className="flex gap-2">
+          <input
+            className={INPUT}
+            inputMode="numeric"
+            placeholder="Ej: 5.000"
+            value={precioMasivo ? Number(precioMasivo).toLocaleString("es-CO") : ""}
+            onChange={(e) => setPrecioMasivo(e.target.value.replace(/\D/g, ""))}
+          />
+          <button
+            type="button"
+            disabled={!precioMasivo || !sinPrecio}
+            onClick={() => setBarrios((l) => l.map((b) => (b.sede_id === sedeId && b.activo && b.precio === null ? { ...b, precio: Number(precioMasivo) } : b)))}
+            className="shrink-0 h-11 rounded-xl bg-primary text-primary-foreground font-bold px-4 disabled:opacity-40"
+          >
+            Aplicar
+          </button>
+        </div>
+      </Tarjeta>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder={`Buscar entre ${deCiudad.length} barrios`} className={`${INPUT} pl-9 bg-card`} />
+      </div>
+
+      {original === null && !error ? (
+        <div className="flex justify-center py-10 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : (
+        <ul className="bg-card border border-border rounded-2xl shadow-card divide-y divide-border overflow-hidden">
+          {visibles.map((b) => (
+            <li key={b.id} className={`flex items-center gap-2 px-3 py-2 ${b.activo ? "" : "bg-muted/60"}`}>
+              <span className={`flex-1 min-w-0 truncate font-medium ${b.activo ? "" : "text-muted-foreground line-through"}`}>{b.nombre}</span>
+              <span className="relative w-28 shrink-0">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <input
+                  inputMode="numeric"
+                  aria-label={`Domicilio a ${b.nombre}`}
+                  placeholder="Por confirmar"
+                  disabled={!b.activo}
+                  value={b.precio === null ? "" : b.precio.toLocaleString("es-CO")}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g, "");
+                    poner(b.id, { precio: v ? Number(v) : null });
+                  }}
+                  className="w-full h-9 rounded-lg border-2 border-border bg-background pl-6 pr-2 text-sm outline-none focus:border-primary placeholder:text-xs"
+                />
+              </span>
+              <button
+                type="button"
+                onClick={() => poner(b.id, { activo: !b.activo })}
+                className="shrink-0 h-9 px-2 rounded-lg text-xs font-semibold hover:bg-muted"
+              >
+                {b.activo ? "Ocultar" : "Mostrar"}
+              </button>
+              <button
+                type="button"
+                aria-label={`Borrar ${b.nombre}`}
+                onClick={async () => {
+                  if (original?.some((o) => o.id === b.id)) await ejecutar(borrarBarrio(clave, b.id), `${b.nombre} borrado`);
+                  setBarrios((l) => l.filter((x) => x.id !== b.id));
+                  setOriginal((l) => (l ?? []).filter((x) => x.id !== b.id));
+                }}
+                className="shrink-0 p-1.5 text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+          {visibles.length === 0 && <li className="p-6 text-center text-sm text-muted-foreground">No hay barrios con ese nombre.</li>}
+        </ul>
+      )}
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (nuevo.trim()) agregar(nuevo.trim(), null);
+          setNuevo("");
+        }}
+        className="flex gap-2"
+      >
+        <input className={`${INPUT} bg-card`} value={nuevo} onChange={(e) => setNuevo(e.target.value)} placeholder="Agregar barrio" />
+        <button type="submit" disabled={!nuevo.trim()} className="shrink-0 h-11 rounded-xl bg-[#D9731B] text-white font-bold px-4 disabled:opacity-40">Agregar</button>
+      </form>
+
+      <button type="button" onClick={() => setVerPegar((v) => !v)} className="text-sm font-semibold text-primary">
+        {verPegar ? "Ocultar" : "¿Tienes la lista en Excel o WhatsApp? Pégala aquí"}
+      </button>
+      {verPegar && (
+        <Tarjeta>
+          <p className="text-xs text-muted-foreground">Un barrio por línea, con o sin precio: "Manga, 5000" o "Manga 5.000". Si ya existe, se actualiza su precio.</p>
+          <textarea className={`${INPUT} h-auto py-2`} rows={5} value={pegar} onChange={(e) => setPegar(e.target.value)} placeholder={"Manga, 5000\nCrespo, 6000\nBocagrande"} />
+          <button
+            type="button"
+            disabled={!pegar.trim()}
+            onClick={() => {
+              for (const linea of pegar.split("\n")) {
+                const m = linea.trim().match(/^(.*?)[\s,;:\t-]*\$?\s*([\d.]+)?$/);
+                const nombre = (m?.[1] ?? linea).trim().replace(/[,;:\t-]+$/, "").trim();
+                const precio = m?.[2] ? Number(m[2].replace(/\./g, "")) : null;
+                if (nombre) agregar(nombre, precio);
+              }
+              setPegar("");
+              setVerPegar(false);
+            }}
+            className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40"
+          >
+            Agregar a {datos.sedes.find((s) => s.id === sedeId)?.ciudad}
+          </button>
+        </Tarjeta>
+      )}
+
+      <div className="sticky bottom-[4.5rem] z-10">
+        <button
+          type="button"
+          disabled={guardando || cambiados.length === 0}
+          onClick={async () => {
+            setGuardando(true);
+            const ok = await ejecutar(guardarBarrios(clave, cambiados), `${cambiados.length} barrios guardados`);
+            setGuardando(false);
+            if (ok) cargar();
+          }}
+          className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold shadow-card disabled:opacity-40 flex items-center justify-center gap-2"
+        >
+          {guardando && <Loader2 className="h-5 w-5 animate-spin" />}
+          {cambiados.length ? `Guardar ${cambiados.length} cambios` : "Sin cambios"}
+        </button>
+      </div>
     </div>
   );
 }

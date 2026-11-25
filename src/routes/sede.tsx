@@ -29,6 +29,8 @@ import {
   type Sede,
 } from "@/lib/sedes";
 import { LOGO_OSCURO_URL, FONDO_MANCHAS, AZUL_MARCA } from "@/lib/brand";
+import { ListaPedidos } from "@/components/lista-pedidos";
+import { cambiarEstadoPedido, listarPedidosSede } from "@/lib/negocio";
 
 export const Route = createFileRoute("/sede")({
   head: () => ({
@@ -293,6 +295,7 @@ type Filtro = "todos" | "disponibles" | "agotados";
 type Estado = "guardando" | "ok" | "error";
 
 function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => void }) {
+  const [vista, setVista] = useState<"disponibilidad" | "pedidos">("disponibilidad");
   const { sede, clave } = sesion;
   const [productos, setProductos] = useState<Product[]>([]);
   const [categorias, setCategorias] = useState<Category[]>([]);
@@ -364,6 +367,26 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-1 bg-card border border-border rounded-2xl shadow-card p-1.5">
+        {(["disponibilidad", "pedidos"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setVista(v)}
+            aria-pressed={vista === v}
+            className={`h-11 rounded-xl font-semibold ${vista === v ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          >
+            {v === "disponibilidad" ? "Disponibilidad" : "Pedidos"}
+          </button>
+        ))}
+      </div>
+
+      {vista === "pedidos" ? (
+        <ListaPedidos
+          cargar={(dias) => listarPedidosSede(sede.id, clave, dias)}
+          cambiarEstado={(id, estado) => cambiarEstadoPedido({ sede: sede.id, clave }, id, estado)}
+        />
+      ) : (
+      <>
       {/* Resumen: dos números grandes, colores distintos */}
       <div className="grid grid-cols-2 gap-3">
         <Resumen
@@ -375,7 +398,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
         />
         <Resumen
           valor={totalAgot}
-          etiqueta="Se acabó hoy"
+          etiqueta="No hay"
           activo={filtro === "agotados"}
           onClick={() => setFiltro((f) => (f === "agotados" ? "todos" : "agotados"))}
           tono="agotado"
@@ -392,7 +415,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
       )}
 
       <p className="rounded-xl bg-primary/10 text-primary text-sm px-4 py-3">
-        <strong>Toca un producto cuando se acabe.</strong> Todo vuelve a estar disponible solo cada día a las 4:00 a.&nbsp;m.
+        <strong>Apaga el interruptor cuando algo se acabe.</strong> Todo vuelve a estar disponible solo cada mañana, antes de abrir.
       </p>
 
       <Tarjeta sinPadding className="overflow-hidden">
@@ -412,7 +435,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
               onClick={() => setFiltro("todos")}
               className="h-10 shrink-0 rounded-lg bg-primary/10 text-primary px-3 text-sm font-semibold inline-flex items-center gap-1"
             >
-              {filtro === "disponibles" ? "Hay" : "Se acabó hoy"} <X className="h-3.5 w-3.5" />
+              {filtro === "disponibles" ? "Hay" : "No hay"} <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -448,6 +471,8 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
       </Tarjeta>
 
       <CambiarClave sedeId={sede.id} clave={clave} onCambiada={onClave} />
+      </>
+      )}
     </div>
   );
 }
@@ -468,11 +493,11 @@ function Resumen({
   const color =
     tono === "disponible"
       ? activo
-        ? "bg-primary text-primary-foreground border-primary"
-        : "bg-card text-primary border-border"
+        ? "bg-[#1F8A3B] text-white border-[#1F8A3B]"
+        : "bg-card text-[#1F8A3B] border-border"
       : activo
-        ? "bg-secondary text-secondary-foreground border-secondary"
-        : "bg-card text-[#B5560B] border-border";
+        ? "bg-[#D92D20] text-white border-[#D92D20]"
+        : "bg-card text-[#D92D20] border-border";
   return (
     <button
       onClick={onClick}
@@ -498,37 +523,45 @@ function FilaProducto({
   estado?: Estado;
   onCambiar: (v: boolean) => void;
 }) {
+  // Interruptor estilo iPhone: verde = hay, rojo = no hay. Toda la fila es tocable.
   return (
     <li>
       <button
         type="button"
+        role="switch"
+        aria-checked={disponible}
         onClick={() => onCambiar(!disponible)}
         disabled={estado === "guardando"}
-        aria-pressed={!disponible}
-        aria-label={`${producto.nombre}: ${disponible ? "hay. Toca si se acabó" : "se acabó hoy. Toca si volvió"}`}
-        className={`w-full flex items-center gap-3 px-4 py-4 text-left transition-colors active:scale-[0.99] ${
-          disponible ? "bg-card hover:bg-primary/5" : "bg-[#FDF1E6] hover:bg-[#FBE7D3]"
+        aria-label={`${producto.nombre}: ${disponible ? "hay" : "no hay"}`}
+        className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${
+          disponible ? "bg-card hover:bg-muted/40" : "bg-[#FFF1F0] hover:bg-[#FFE6E4]"
         }`}
       >
-        {/* Barra lateral de estado: azul hay, naranja se acabó */}
-        <span aria-hidden className={`self-stretch w-1.5 rounded-full ${disponible ? "bg-primary" : "bg-secondary"}`} />
         <span className="flex-1 min-w-0">
-          <span className={`block font-semibold text-base truncate ${disponible ? "text-foreground" : "text-muted-foreground line-through"}`}>
+          <span className={`block font-semibold text-base truncate ${disponible ? "text-foreground" : "text-[#9F1F17]"}`}>
             {producto.nombre}
           </span>
           <span className="block text-xs text-muted-foreground">{formatCOP(producto.precio)}</span>
         </span>
+        <span className={`shrink-0 w-16 text-right text-sm font-bold ${disponible ? "text-[#1F8A3B]" : "text-[#D92D20]"}`}>
+          {estado === "guardando" ? (
+            <Loader2 className="inline h-4 w-4 animate-spin" aria-label="Guardando" />
+          ) : estado === "ok" ? (
+            <Check className="inline h-4 w-4 mr-0.5" aria-label="Guardado" />
+          ) : null}
+          {disponible ? "Hay" : "No hay"}
+        </span>
         <span
-          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold ${
-            disponible ? "bg-primary/10 text-primary" : "bg-[#B5560B] text-white"
+          aria-hidden
+          className={`relative shrink-0 h-[31px] w-[51px] rounded-full transition-colors duration-200 ${
+            disponible ? "bg-[#34C759]" : "bg-[#FF3B30]"
           }`}
         >
-          {estado === "guardando" ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-label="Guardando" />
-          ) : estado === "ok" ? (
-            <Check className="h-4 w-4" aria-label="Guardado" />
-          ) : null}
-          {disponible ? "Hay" : "Se acabó hoy"}
+          <span
+            className={`absolute top-[2px] left-[2px] h-[27px] w-[27px] rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.16)] transition-transform duration-200 ${
+              disponible ? "translate-x-[20px]" : "translate-x-0"
+            }`}
+          />
         </span>
       </button>
     </li>

@@ -21,7 +21,7 @@ export const ICONOS_ENLACE: { id: IconoEnlace; nombre: string }[] = [
 ];
 
 // Datos que pide el formulario del pedido (checkout), en orden
-export type TipoCampo = "texto" | "texto_largo" | "telefono" | "opciones" | "pedido";
+export type TipoCampo = "texto" | "texto_largo" | "telefono" | "opciones" | "barrio" | "pedido";
 export type CampoPedido = {
   id: string;
   etiqueta: string;
@@ -36,13 +36,17 @@ export const TIPOS_CAMPO: { id: Exclude<TipoCampo, "pedido">; nombre: string }[]
   { id: "texto_largo", nombre: "Texto largo" },
   { id: "telefono", nombre: "Teléfono" },
   { id: "opciones", nombre: "Elegir una opción" },
+  { id: "barrio", nombre: "Barrio (con precio de domicilio)" },
 ];
+
+const CAMPO_BARRIO: CampoPedido = { id: "barrio", etiqueta: "Barrio", tipo: "barrio", obligatorio: true, activo: true };
 
 function camposPorDefecto(mediosPago: string[]): CampoPedido[] {
   return [
     { id: "nombre", etiqueta: "Nombre completo", tipo: "texto", obligatorio: true, activo: true },
     { id: "pedido", etiqueta: "Pedido detallado", tipo: "pedido", obligatorio: true, activo: true },
     { id: "direccion", etiqueta: "Dirección + punto de referencia", tipo: "texto_largo", obligatorio: true, activo: true },
+    CAMPO_BARRIO,
     { id: "telefono", etiqueta: "Número de contacto", tipo: "telefono", obligatorio: true, activo: true },
     { id: "pago", etiqueta: "Medio de pago", tipo: "opciones", obligatorio: true, activo: true, opciones: mediosPago },
   ];
@@ -99,7 +103,7 @@ export function normalizarAjustes(raw: unknown): Ajustes {
         }))
     : d.enlaces;
   const mediosPago = Array.isArray(a.medios_pago) && a.medios_pago.length ? a.medios_pago.map(String) : d.medios_pago;
-  const tipos: TipoCampo[] = ["texto", "texto_largo", "telefono", "opciones", "pedido"];
+  const tipos: TipoCampo[] = ["texto", "texto_largo", "telefono", "opciones", "barrio", "pedido"];
   let campos: CampoPedido[] = Array.isArray(a.campos_pedido)
     ? a.campos_pedido
         .filter((c) => c && typeof c === "object" && tipos.includes(c.tipo))
@@ -115,6 +119,12 @@ export function normalizarAjustes(raw: unknown): Ajustes {
   // El detalle del pedido siempre está en el mensaje
   if (!campos.some((c) => c.tipo === "pedido")) {
     campos = [campos[0], camposPorDefecto([])[1], ...campos.slice(1)].filter(Boolean);
+  }
+  // El barrio (precio de domicilio) se agrega después de la dirección si aún no está.
+  // Se puede ocultar desde el panel, pero no se pierde.
+  if (!campos.some((c) => c.tipo === "barrio")) {
+    const i = campos.findIndex((c) => c.id === "direccion");
+    campos = [...campos.slice(0, i + 1 || campos.length), CAMPO_BARRIO, ...campos.slice(i + 1 || campos.length)];
   }
   return {
     saludo_pedido: typeof a.saludo_pedido === "string" && a.saludo_pedido.trim() ? a.saludo_pedido : d.saludo_pedido,
@@ -290,12 +300,15 @@ export function mensajePedido(
   valores: Record<string, string>,
   detalle: string,
   total: string,
+  extra: { codigo?: string; domicilio?: string } = {},
 ) {
   const partes = [saludo];
+  if (extra.codigo) partes.push(`Pedido #${extra.codigo}`);
   for (const c of campos.filter((c) => c.activo)) {
     if (c.tipo === "pedido") partes.push(`- ${c.etiqueta}:\n${detalle}`);
     else if ((valores[c.id] ?? "").trim()) partes.push(`- ${c.etiqueta}: ${valores[c.id].trim()}`);
   }
+  if (extra.domicilio) partes.push(`Domicilio: ${extra.domicilio}`);
   partes.push(`Total: ${total}`);
   return partes.join("\n\n");
 }

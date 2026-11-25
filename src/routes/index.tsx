@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, listarPuntos, PUNTOS_RESPALDO, type Sede, type PuntoPedido } from "@/lib/sedes";
-import { MapPin, ChevronDown, Instagram } from "lucide-react";
+import { MapPin, ChevronDown, Instagram, X } from "lucide-react";
+import { fechaColombia, listarBarrios, listarPromos, promoVigente, registrarPedido, type Barrio, type Promo } from "@/lib/negocio";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
@@ -76,6 +77,24 @@ function CatalogPage() {
     }
   });
   const [puntos, setPuntos] = useState<PuntoPedido[]>([]);
+  const [barrios, setBarrios] = useState<Barrio[]>([]);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [promosVistas, setPromosVistas] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("promosVistas") ?? "{}");
+    } catch {
+      return {};
+    }
+  });
+  const marcarPromoVista = (id: string) => {
+    const v = { ...promosVistas, [id]: fechaColombia() };
+    setPromosVistas(v);
+    try {
+      localStorage.setItem("promosVistas", JSON.stringify(v));
+    } catch {
+      /* solo se vuelve a mostrar */
+    }
+  };
   const [puntoId, setPuntoId] = useState<string | null>(() => {
     try {
       return localStorage.getItem("puntoSeleccionado");
@@ -91,6 +110,8 @@ function CatalogPage() {
     listarPuntos()
       .then((lista) => setPuntos(lista.length ? lista : PUNTOS_RESPALDO))
       .catch(() => setPuntos(PUNTOS_RESPALDO));
+    listarBarrios().then(setBarrios);
+    listarPromos().then(setPromos);
   }, []);
 
   useEffect(() => {
@@ -327,6 +348,28 @@ function CatalogPage() {
         />
       )}
 
+      {/* Pop-up de promoción (programado desde /admin → Promos); una vez al día por promo */}
+      {(() => {
+        if (!sedeId || selectorAbierto || faltaPunto || checkoutOpen || cartOpen || selected) return null;
+        const promo = promos.find((p) => promoVigente(p, ahora) && promosVistas[p.id] !== fechaColombia(ahora));
+        if (!promo) return null;
+        const producto = state.productos.find(
+          (x) => x.id === promo.producto_id && x.disponible && (dispSede[x.id] ?? true) && visibleHoy(x.dias, ahora),
+        );
+        return (
+          <PopupPromo
+            promo={promo}
+            producto={producto ?? null}
+            onCerrar={() => marcarPromoVista(promo.id)}
+            onAgregar={() => {
+              if (producto) cart.add(producto, 1);
+              marcarPromoVista(promo.id);
+              if (producto) setCartOpen(true);
+            }}
+          />
+        );
+      })()}
+
       {/* Botón flotante del carrito */}
       {cart.count > 0 && (
         <button
@@ -359,6 +402,9 @@ function CatalogPage() {
         lugar={lugarPedido}
         campos={ajustes.campos_pedido}
         saludo={ajustes.saludo_pedido}
+        barrios={barrios.filter((b) => b.sede_id === sedeId)}
+        sedeId={sedeId}
+        puntoId={puntoActual?.id ?? null}
         onSent={() => {
           cart.clear();
           setCheckoutOpen(false);
@@ -628,6 +674,9 @@ function CheckoutModal({
   lugar,
   campos,
   saludo,
+  barrios,
+  sedeId,
+  puntoId,
   onSent,
 }: {
   open: boolean;
@@ -638,8 +687,12 @@ function CheckoutModal({
   lugar: string;
   campos: CampoPedido[];
   saludo: string;
+  barrios: Barrio[];
+  sedeId: number | null;
+  puntoId: string | null;
   onSent: () => void;
 }) {
+  const [enviando, setEnviando] = useState(false);
   // Los datos que se piden se editan en /admin → Ajustes → Formulario del pedido
   const visibles = campos.filter((c) => c.activo && c.tipo !== "pedido");
   const iniciales = () =>
@@ -650,16 +703,45 @@ function CheckoutModal({
     setValores((v) => ({ ...iniciales(), ...v }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campos]);
-  const faltan = visibles.filter((c) => c.obligatorio && !(valores[c.id] ?? "").trim());
+  // Barrio elegido: id de la lista o "__otro" con el nombre escrito
+  const campoBarrio = visibles.find((c) => c.tipo === "barrio");
+  const idBarrio = campoBarrio ? (valores[campoBarrio.id] ?? "") : "";
+  const barrio = barrios.find((b) => b.id === idBarrio) ?? null;
+  const textoOtro = campoBarrio ? (valores[`${campoBarrio.id}__otro`] ?? "") : "";
+  const sinLista = !!campoBarrio && barrios.length === 0;
+  const domicilio = barrio?.precio ?? null; // null = por confirmar
+  const hayBarrio = !!barrio || ((idBarrio === "__otro" || sinLista) && !!textoOtro.trim());
+  const valorCampo = (c: CampoPedido) =>
+    c.tipo === "barrio" ? (barrio ? barrio.nombre : textoOtro.trim()) : (valores[c.id] ?? "").trim();
+  const faltan = visibles.filter((c) => c.obligatorio && !valorCampo(c));
+  const total = subtotal + (domicilio ?? 0);
 
-  const enviar = () => {
-    if (faltan.length) return;
+  const enviar = async () => {
+    if (faltan.length || enviando) return;
+    setEnviando(true);
+    // Se abre la pestaña ya (dentro del toque) para que el navegador no la bloquee
+    const ventana = window.open("", "_blank");
+    const legibles = Object.fromEntries(visibles.map((c) => [c.id, valorCampo(c)]));
+    const cliente = Object.fromEntries(visibles.map((c) => [c.etiqueta, valorCampo(c)]).filter(([, v]) => v));
+    const registro = await registrarPedido({
+      sede_id: sedeId,
+      punto_id: puntoId,
+      cliente,
+      items: items.map((i) => ({ id: i.product.id, cantidad: i.cantidad })),
+      barrio_id: barrio?.id ?? null,
+      barrio_texto: barrio ? null : textoOtro.trim() || null,
+    });
     const detalle = items
       .map((i) => `   - ${i.cantidad}x ${i.product.nombre} (${formatCOP(i.product.precio * i.cantidad)})`)
       .join("\n");
-    const msg = mensajePedido(saludo, campos, valores, detalle, formatCOP(subtotal));
+    const msg = mensajePedido(saludo, campos, legibles, detalle, formatCOP(total), {
+      codigo: registro?.codigo,
+      domicilio: campoBarrio && hayBarrio ? (domicilio === null ? "por confirmar" : formatCOP(domicilio)) : undefined,
+    });
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank");
+    if (ventana) ventana.location.href = url;
+    else window.location.href = url;
+    setEnviando(false);
     onSent();
     setValores(iniciales());
   };
@@ -690,6 +772,39 @@ function CheckoutModal({
                 {!c.obligatorio && <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>}
               </Label>
             );
+            if (c.tipo === "barrio") {
+              return (
+                <div key={c.id}>
+                  {etiqueta}
+                  {!sinLista && (
+                    <select
+                      id={id}
+                      value={valores[c.id] ?? ""}
+                      onChange={(e) => poner(c.id, e.target.value)}
+                      className="mt-1 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">Elige tu barrio</option>
+                      {barrios.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.nombre} — {b.precio === null ? "domicilio por confirmar" : `domicilio ${formatCOP(b.precio)}`}
+                        </option>
+                      ))}
+                      <option value="__otro">Otro barrio (te confirmamos el precio)</option>
+                    </select>
+                  )}
+                  {(sinLista || idBarrio === "__otro") && (
+                    <Input
+                      className="mt-2"
+                      value={textoOtro}
+                      onChange={(e) => poner(`${c.id}__otro`, e.target.value)}
+                      placeholder="Escribe tu barrio"
+                      maxLength={80}
+                      aria-label="Nombre del barrio"
+                    />
+                  )}
+                </div>
+              );
+            }
             if (c.tipo === "opciones") {
               return (
                 <div key={c.id}>
@@ -733,9 +848,21 @@ function CheckoutModal({
               </div>
             );
           })}
+          {campoBarrio && hayBarrio && (
+            <dl className="rounded-xl bg-muted/60 p-3 text-sm space-y-1">
+              <div className="flex justify-between"><dt>Productos</dt><dd>{formatCOP(subtotal)}</dd></div>
+              <div className="flex justify-between">
+                <dt>Domicilio{barrio ? ` (${barrio.nombre})` : ""}</dt>
+                <dd>{domicilio === null ? "Por confirmar" : formatCOP(domicilio)}</dd>
+              </div>
+              <div className="flex justify-between font-display font-bold text-primary text-base pt-1 border-t border-border">
+                <dt>Total</dt><dd>{formatCOP(total)}{domicilio === null ? " + domicilio" : ""}</dd>
+              </div>
+            </dl>
+          )}
           <Button
             onClick={enviar}
-            disabled={faltan.length > 0}
+            disabled={faltan.length > 0 || enviando}
             size="lg"
             className="w-full bg-[#25D366] text-[#073B1F] font-bold hover:bg-[#20BD5A]"
           >
@@ -885,6 +1012,56 @@ function SelectorSede({
             Cancelar
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PopupPromo({
+  promo,
+  producto,
+  onCerrar,
+  onAgregar,
+}: {
+  promo: Promo;
+  producto: Product | null;
+  onCerrar: () => void;
+  onAgregar: () => void;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={promo.titulo || "Promoción"}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 pb-20"
+      onClick={onCerrar}
+    >
+      <div className="relative w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onCerrar}
+          aria-label="Cerrar"
+          className="absolute -top-3 -right-3 z-10 h-10 w-10 rounded-full bg-white text-primary shadow-card flex items-center justify-center"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        {/* Formato 3:4 (vertical), recomendado 1080 × 1440 */}
+        <div className="aspect-[3/4] max-h-[calc(100dvh-12rem)] mx-auto rounded-3xl overflow-hidden shadow-2xl bg-card">
+          <img src={promo.imagen} alt={promo.titulo || "Promoción"} className="w-full h-full object-cover" />
+        </div>
+        <div className="mt-3 flex gap-2">
+          {producto ? (
+            <button
+              onClick={onAgregar}
+              className="btn-dorado flex-1 h-12 rounded-2xl font-bold shadow-card"
+            >
+              {promo.boton_texto || "Lo quiero"} · {formatCOP(producto.precio)}
+            </button>
+          ) : (
+            <button onClick={onCerrar} className="btn-dorado flex-1 h-12 rounded-2xl font-bold shadow-card">
+              {promo.boton_texto || "Ver el menú"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

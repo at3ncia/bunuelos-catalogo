@@ -37,7 +37,7 @@ export function esPorCiudad(sedes: Sede[]) {
 }
 
 // Datos frescos -> última copia buena -> respaldo. Nunca lanza error.
-async function cargarConRespaldo<T>(
+export async function cargarConRespaldo<T>(
   clave: string,
   consulta: PromiseLike<{ data: unknown; error: { message: string } | null }>,
   respaldo: T[],
