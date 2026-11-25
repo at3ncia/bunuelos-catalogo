@@ -20,7 +20,37 @@ export const ICONOS_ENLACE: { id: IconoEnlace; nombre: string }[] = [
   { id: "moto", nombre: "Domicilios / app" },
 ];
 
+// Datos que pide el formulario del pedido (checkout), en orden
+export type TipoCampo = "texto" | "texto_largo" | "telefono" | "opciones" | "pedido";
+export type CampoPedido = {
+  id: string;
+  etiqueta: string;
+  tipo: TipoCampo;
+  obligatorio: boolean;
+  activo: boolean;
+  opciones?: string[]; // solo tipo "opciones"
+};
+
+export const TIPOS_CAMPO: { id: Exclude<TipoCampo, "pedido">; nombre: string }[] = [
+  { id: "texto", nombre: "Texto corto" },
+  { id: "texto_largo", nombre: "Texto largo" },
+  { id: "telefono", nombre: "Teléfono" },
+  { id: "opciones", nombre: "Elegir una opción" },
+];
+
+function camposPorDefecto(mediosPago: string[]): CampoPedido[] {
+  return [
+    { id: "nombre", etiqueta: "Nombre completo", tipo: "texto", obligatorio: true, activo: true },
+    { id: "pedido", etiqueta: "Pedido detallado", tipo: "pedido", obligatorio: true, activo: true },
+    { id: "direccion", etiqueta: "Dirección + punto de referencia", tipo: "texto_largo", obligatorio: true, activo: true },
+    { id: "telefono", etiqueta: "Número de contacto", tipo: "telefono", obligatorio: true, activo: true },
+    { id: "pago", etiqueta: "Medio de pago", tipo: "opciones", obligatorio: true, activo: true, opciones: mediosPago },
+  ];
+}
+
 export type Ajustes = {
+  saludo_pedido: string; // primera línea del mensaje de WhatsApp
+  campos_pedido: CampoPedido[];
   bio: string; // texto bajo el logo en /links
   mostrar_boton_menu: boolean;
   enlaces: Enlace[];
@@ -34,6 +64,8 @@ export type Ajustes = {
 };
 
 export const AJUSTES_POR_DEFECTO: Ajustes = {
+  saludo_pedido: "Hola! quisiera hacer un pedido:",
+  campos_pedido: camposPorDefecto(["Efectivo", "Nequi", "Bancolombia", "Otro"]),
   bio: "",
   mostrar_boton_menu: true,
   enlaces: [],
@@ -66,7 +98,27 @@ export function normalizarAjustes(raw: unknown): Ajustes {
           activo: e.activo !== false,
         }))
     : d.enlaces;
+  const mediosPago = Array.isArray(a.medios_pago) && a.medios_pago.length ? a.medios_pago.map(String) : d.medios_pago;
+  const tipos: TipoCampo[] = ["texto", "texto_largo", "telefono", "opciones", "pedido"];
+  let campos: CampoPedido[] = Array.isArray(a.campos_pedido)
+    ? a.campos_pedido
+        .filter((c) => c && typeof c === "object" && tipos.includes(c.tipo))
+        .map((c) => ({
+          id: String(c.id || Math.random().toString(36).slice(2, 8)),
+          etiqueta: String(c.etiqueta ?? ""),
+          tipo: c.tipo,
+          obligatorio: c.tipo === "pedido" ? true : c.obligatorio !== false,
+          activo: c.tipo === "pedido" ? true : c.activo !== false,
+          ...(c.tipo === "opciones" ? { opciones: (c.opciones ?? []).map(String).filter(Boolean) } : {}),
+        }))
+    : camposPorDefecto(mediosPago); // ajustes de antes: se arma con sus medios de pago
+  // El detalle del pedido siempre está en el mensaje
+  if (!campos.some((c) => c.tipo === "pedido")) {
+    campos = [campos[0], camposPorDefecto([])[1], ...campos.slice(1)].filter(Boolean);
+  }
   return {
+    saludo_pedido: typeof a.saludo_pedido === "string" && a.saludo_pedido.trim() ? a.saludo_pedido : d.saludo_pedido,
+    campos_pedido: campos,
     bio: typeof a.bio === "string" ? a.bio : d.bio,
     mostrar_boton_menu: a.mostrar_boton_menu !== false,
     enlaces,
@@ -74,7 +126,7 @@ export function normalizarAjustes(raw: unknown): Ajustes {
     subtitulo: typeof a.subtitulo === "string" ? a.subtitulo : d.subtitulo,
     instagram: typeof a.instagram === "string" ? a.instagram.replace(/^@/, "") : d.instagram,
     boton_menu: typeof a.boton_menu === "string" && a.boton_menu.trim() ? a.boton_menu : d.boton_menu,
-    medios_pago: Array.isArray(a.medios_pago) && a.medios_pago.length ? a.medios_pago.map(String) : d.medios_pago,
+    medios_pago: mediosPago,
     hora_reinicio: Number.isInteger(a.hora_reinicio) ? (a.hora_reinicio as number) : d.hora_reinicio,
     horario_domicilios: Array.isArray(a.horario_domicilios) ? a.horario_domicilios : d.horario_domicilios,
   };
@@ -228,4 +280,22 @@ export function urlEnlace(e: Pick<Enlace, "url" | "icono">) {
     return `https://wa.me/${n.length === 10 ? `57${n}` : n}`;
   }
   return /^(https?:|tel:|mailto:)/i.test(u) ? u : `https://${u}`;
+}
+
+// Mensaje de WhatsApp con el mismo formato de siempre:
+// saludo, "- Etiqueta: valor" por cada dato (el detalle del pedido en su lugar) y el total.
+export function mensajePedido(
+  saludo: string,
+  campos: CampoPedido[],
+  valores: Record<string, string>,
+  detalle: string,
+  total: string,
+) {
+  const partes = [saludo];
+  for (const c of campos.filter((c) => c.activo)) {
+    if (c.tipo === "pedido") partes.push(`- ${c.etiqueta}:\n${detalle}`);
+    else if ((valores[c.id] ?? "").trim()) partes.push(`- ${c.etiqueta}: ${valores[c.id].trim()}`);
+  }
+  partes.push(`Total: ${total}`);
+  return partes.join("\n\n");
 }

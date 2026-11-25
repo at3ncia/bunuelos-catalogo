@@ -29,8 +29,10 @@ import {
   etiquetaFranjas,
   ICONOS_ENLACE,
   NOMBRES_DIA,
+  TIPOS_CAMPO,
   urlEnlace,
   type Ajustes,
+  type CampoPedido,
   type Enlace,
   type Franja,
   type ReglaHorario,
@@ -1077,16 +1079,18 @@ function EditorPaginaLinks({ datos, clave, ejecutar }: PropsPestana) {
 
 function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
   const [a, setA] = useState<Ajustes>(datos.ajustes);
-  const [pagos, setPagos] = useState(datos.ajustes.medios_pago.join(", "));
   const [guardando, setGuardando] = useState(false);
   useEffect(() => {
     setA(datos.ajustes);
-    setPagos(datos.ajustes.medios_pago.join(", "));
   }, [datos.ajustes]);
   const cambiar = (c: Partial<Ajustes>) => setA({ ...a, ...c });
-  const mediosPago = pagos.split(",").map((x) => x.trim()).filter(Boolean);
-  const final: Ajustes = { ...a, medios_pago: mediosPago };
+  // medios_pago se mantiene igual a las opciones del dato "Medio de pago" (compatibilidad)
+  const pago = a.campos_pedido.find((c) => c.id === "pago" && c.tipo === "opciones");
+  const final: Ajustes = { ...a, medios_pago: pago?.opciones?.length ? pago.opciones : a.medios_pago };
   const sinCambios = JSON.stringify(final) === JSON.stringify(datos.ajustes);
+  const errorFormulario = a.campos_pedido.find(
+    (c) => c.activo && (!c.etiqueta.trim() || (c.tipo === "opciones" && !(c.opciones ?? []).length)),
+  );
 
   const cambiarRegla = (i: number, r: ReglaHorario | null) => {
     const reglas = [...a.horario_domicilios];
@@ -1117,10 +1121,11 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
         </Campo>
       </Tarjeta>
 
-      <Tarjeta titulo="Medios de pago" icono={<Tag className="h-4 w-4" />}>
-        <p className="text-xs text-muted-foreground">Separados por coma. El primero queda seleccionado por defecto.</p>
-        <input className={INPUT} value={pagos} onChange={(e) => setPagos(e.target.value)} />
-      </Tarjeta>
+      <EditorFormularioPedido
+        saludo={a.saludo_pedido}
+        campos={a.campos_pedido}
+        onCambiar={(c) => cambiar(c)}
+      />
 
       <Tarjeta titulo="Horario de domicilios" icono={<Clock className="h-4 w-4" />}>
         <p className="text-xs text-muted-foreground">
@@ -1155,13 +1160,165 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
       <div className="sticky bottom-[4.5rem] z-10">
         <button
           type="submit"
-          disabled={guardando || sinCambios || mediosPago.length === 0}
+          disabled={guardando || sinCambios || !!errorFormulario}
           className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold shadow-card disabled:opacity-40 flex items-center justify-center gap-2"
         >
           {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {sinCambios ? "Sin cambios" : "Guardar ajustes"}
         </button>
       </div>
     </form>
+  );
+}
+
+function EditorFormularioPedido({
+  saludo,
+  campos,
+  onCambiar,
+}: {
+  saludo: string;
+  campos: CampoPedido[];
+  onCambiar: (c: Partial<Ajustes>) => void;
+}) {
+  const poner = (i: number, c: Partial<CampoPedido> | null) => {
+    const lista = [...campos];
+    if (c) lista[i] = { ...lista[i], ...c };
+    else lista.splice(i, 1);
+    onCambiar({ campos_pedido: lista });
+  };
+  const mover = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= campos.length) return;
+    const lista = [...campos];
+    [lista[i], lista[j]] = [lista[j], lista[i]];
+    onCambiar({ campos_pedido: lista });
+  };
+  return (
+    <Tarjeta titulo="Formulario del pedido" icono={<Tag className="h-4 w-4" />}>
+      <p className="text-xs text-muted-foreground">
+        Los datos que llena el cliente antes de enviar el pedido por WhatsApp, en este orden. Así llegan en el mensaje.
+      </p>
+      <Campo etiqueta="Saludo del mensaje">
+        <input className={INPUT} value={saludo} onChange={(e) => onCambiar({ saludo_pedido: e.target.value })} maxLength={120} />
+      </Campo>
+      <ul className="space-y-2">
+        {campos.map((c, i) => (
+          <li key={c.id} className={`rounded-xl border border-border p-3 space-y-2 ${c.activo ? "" : "opacity-60"}`}>
+            {c.tipo === "pedido" ? (
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-sm">
+                  <strong>{c.etiqueta}</strong>
+                  <span className="block text-xs text-muted-foreground">Los productos y cantidades. Siempre va en el mensaje.</span>
+                </span>
+                <BotonesOrden i={i} total={campos.length} onMover={mover} />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_12rem] gap-2">
+                  <input
+                    className={`${INPUT} h-10`}
+                    value={c.etiqueta}
+                    onChange={(e) => poner(i, { etiqueta: e.target.value })}
+                    placeholder="Ej: Barrio"
+                    aria-label="Nombre del dato"
+                  />
+                  <select
+                    className={`${INPUT} h-10`}
+                    value={c.tipo}
+                    onChange={(e) => {
+                      const tipo = e.target.value as CampoPedido["tipo"];
+                      poner(i, tipo === "opciones" ? { tipo, opciones: c.opciones?.length ? c.opciones : ["Sí", "No"] } : { tipo });
+                    }}
+                    aria-label="Tipo de dato"
+                  >
+                    {TIPOS_CAMPO.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {c.tipo === "opciones" && (
+                  <OpcionesCampo opciones={c.opciones ?? []} onCambiar={(opciones) => poner(i, { opciones })} />
+                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => poner(i, { obligatorio: !c.obligatorio })}
+                    className={`h-8 px-3 rounded-full text-xs font-semibold border-2 ${
+                      c.obligatorio ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {c.obligatorio ? "Obligatorio" : "Opcional"}
+                  </button>
+                  <button type="button" onClick={() => poner(i, { activo: !c.activo })} className="h-8 px-2 rounded-lg text-xs font-semibold hover:bg-muted">
+                    {c.activo ? "Ocultar" : "Mostrar"}
+                  </button>
+                  <span className="flex-1" />
+                  <BotonesOrden i={i} total={campos.length} onMover={mover} />
+                  <button type="button" onClick={() => poner(i, null)} aria-label="Quitar dato" className="p-1.5 text-destructive">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        onClick={() =>
+          onCambiar({
+            campos_pedido: [
+              ...campos,
+              { id: uid().slice(0, 6), etiqueta: "", tipo: "texto", obligatorio: false, activo: true },
+            ],
+          })
+        }
+        className="w-full h-10 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground font-semibold hover:border-primary hover:text-primary"
+      >
+        + Agregar dato
+      </button>
+      <p className="text-xs text-muted-foreground">
+        Ideas: "Barrio", "¿Domicilio o recoger?" (elegir opción), "Notas del pedido" (texto largo, opcional).
+      </p>
+    </Tarjeta>
+  );
+}
+
+// Opciones separadas por coma; se guarda el texto tal cual se escribe para no estorbar al teclear
+function OpcionesCampo({ opciones, onCambiar }: { opciones: string[]; onCambiar: (o: string[]) => void }) {
+  const [texto, setTexto] = useState(opciones.join(", "));
+  useEffect(() => {
+    const actual = texto.split(",").map((x) => x.trim()).filter(Boolean);
+    if (JSON.stringify(actual) !== JSON.stringify(opciones)) setTexto(opciones.join(", "));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opciones]);
+  return (
+    <div>
+      <input
+        className={`${INPUT} h-10`}
+        value={texto}
+        onChange={(e) => {
+          setTexto(e.target.value);
+          onCambiar(e.target.value.split(",").map((x) => x.trim()).filter(Boolean));
+        }}
+        aria-label="Opciones"
+      />
+      <p className="mt-1 text-xs text-muted-foreground">Opciones separadas por coma. La primera queda marcada.</p>
+    </div>
+  );
+}
+
+function BotonesOrden({ i, total, onMover }: { i: number; total: number; onMover: (i: number, dir: -1 | 1) => void }) {
+  return (
+    <>
+      <button type="button" onClick={() => onMover(i, -1)} disabled={i === 0} aria-label="Subir" className="p-1.5 disabled:opacity-25">
+        <ArrowUp className="h-4 w-4" />
+      </button>
+      <button type="button" onClick={() => onMover(i, 1)} disabled={i === total - 1} aria-label="Bajar" className="p-1.5 disabled:opacity-25">
+        <ArrowDown className="h-4 w-4" />
+      </button>
+    </>
   );
 }
 

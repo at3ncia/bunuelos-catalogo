@@ -7,7 +7,7 @@ import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
 import { LOGO_URL, LOGO_OSCURO_URL, MASCOTA_URL, AZUL_MARCA, FONDO_MANCHAS } from "@/lib/brand";
 import { FotoProducto, colorCategoria, textoSobre } from "@/components/foto-producto";
-import { estadoDomicilios, etiquetaDias, etiquetaFranjas, visibleHoy } from "@/lib/ajustes";
+import { estadoDomicilios, etiquetaDias, etiquetaFranjas, mensajePedido, visibleHoy, type CampoPedido } from "@/lib/ajustes";
 import { Clock, RefreshCw } from "lucide-react";
 import {
   Dialog,
@@ -357,7 +357,8 @@ function CatalogPage() {
         subtotal={cart.subtotal}
         whatsapp={whatsappPedido}
         lugar={lugarPedido}
-        mediosPago={ajustes.medios_pago}
+        campos={ajustes.campos_pedido}
+        saludo={ajustes.saludo_pedido}
         onSent={() => {
           cart.clear();
           setCheckoutOpen(false);
@@ -625,7 +626,8 @@ function CheckoutModal({
   subtotal,
   whatsapp,
   lugar,
-  mediosPago,
+  campos,
+  saludo,
   onSent,
 }: {
   open: boolean;
@@ -634,43 +636,34 @@ function CheckoutModal({
   subtotal: number;
   whatsapp: string;
   lugar: string;
-  mediosPago: string[];
+  campos: CampoPedido[];
+  saludo: string;
   onSent: () => void;
 }) {
-  const [nombre, setNombre] = useState("");
-  const [direccion, setDireccion] = useState("");
-  const [telefono, setTelefono] = useState("");
-  const [pago, setPago] = useState(mediosPago[0] ?? "Efectivo");
+  // Los datos que se piden se editan en /admin → Ajustes → Formulario del pedido
+  const visibles = campos.filter((c) => c.activo && c.tipo !== "pedido");
+  const iniciales = () =>
+    Object.fromEntries(visibles.map((c) => [c.id, c.tipo === "opciones" ? (c.opciones?.[0] ?? "") : ""]));
+  const [valores, setValores] = useState<Record<string, string>>(iniciales);
+  // Si cambian los campos (se recargó el menú), se completan los que falten
+  useEffect(() => {
+    setValores((v) => ({ ...iniciales(), ...v }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campos]);
+  const faltan = visibles.filter((c) => c.obligatorio && !(valores[c.id] ?? "").trim());
 
   const enviar = () => {
-    if (!nombre.trim() || !direccion.trim() || !telefono.trim()) return;
+    if (faltan.length) return;
     const detalle = items
       .map((i) => `   - ${i.cantidad}x ${i.product.nombre} (${formatCOP(i.product.precio * i.cantidad)})`)
       .join("\n");
-    const msg = `Hola! quisiera hacer un pedido:
-
-- Nombre completo: ${nombre}
-
-- Pedido detallado:
-${detalle}
-
-- Dirección + punto de referencia: ${direccion}
-
-- Número de contacto: ${telefono}
-
-- Medio de pago: ${pago}
-
-Total: ${formatCOP(subtotal)}`;
+    const msg = mensajePedido(saludo, campos, valores, detalle, formatCOP(subtotal));
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
     onSent();
-    setNombre("");
-    setDireccion("");
-    setTelefono("");
-    setPago(mediosPago[0] ?? "Efectivo");
+    setValores(iniciales());
   };
-
-  const opciones = mediosPago;
+  const poner = (id: string, valor: string) => setValores((v) => ({ ...v, [id]: valor }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -689,51 +682,68 @@ Total: ${formatCOP(subtotal)}`;
           <span className="font-display font-bold text-primary shrink-0">{formatCOP(subtotal)}</span>
         </div>
         <div className="space-y-3 mt-2">
-          <div>
-            <Label htmlFor="nombre">Nombre completo</Label>
-            <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={80} />
-          </div>
-          <div>
-            <Label htmlFor="dir">Dirección + punto de referencia</Label>
-            <Textarea id="dir" value={direccion} onChange={(e) => setDireccion(e.target.value)} maxLength={240} rows={2} />
-          </div>
-          <div>
-            <Label htmlFor="tel">Número de contacto</Label>
-            <Input
-              id="tel"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              inputMode="tel"
-              maxLength={20}
-            />
-          </div>
-          <div>
-            <Label>Medio de pago</Label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {opciones.map((o) => (
-                <button
-                  key={o}
-                  type="button"
-                  onClick={() => setPago(o)}
-                  className={`px-3 py-2 rounded-full text-sm border transition ${
-                    pago === o
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-card border-border hover:bg-muted"
-                  }`}
-                >
-                  {o}
-                </button>
-              ))}
-            </div>
-          </div>
+          {visibles.map((c) => {
+            const id = `campo-${c.id}`;
+            const etiqueta = (
+              <Label htmlFor={c.tipo === "opciones" ? undefined : id}>
+                {c.etiqueta}
+                {!c.obligatorio && <span className="ml-1 text-xs font-normal text-muted-foreground">(opcional)</span>}
+              </Label>
+            );
+            if (c.tipo === "opciones") {
+              return (
+                <div key={c.id}>
+                  {etiqueta}
+                  <div className="flex flex-wrap gap-2 mt-1" role="radiogroup" aria-label={c.etiqueta}>
+                    {(c.opciones ?? []).map((o) => (
+                      <button
+                        key={o}
+                        type="button"
+                        role="radio"
+                        aria-checked={valores[c.id] === o}
+                        onClick={() => poner(c.id, o)}
+                        className={`px-3 py-2 rounded-full text-sm border transition ${
+                          valores[c.id] === o
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-card border-border hover:bg-muted"
+                        }`}
+                      >
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={c.id}>
+                {etiqueta}
+                {c.tipo === "texto_largo" ? (
+                  <Textarea id={id} value={valores[c.id] ?? ""} onChange={(e) => poner(c.id, e.target.value)} maxLength={240} rows={2} />
+                ) : (
+                  <Input
+                    id={id}
+                    value={valores[c.id] ?? ""}
+                    onChange={(e) => poner(c.id, e.target.value)}
+                    inputMode={c.tipo === "telefono" ? "tel" : undefined}
+                    autoComplete={c.tipo === "telefono" ? "tel" : c.id === "nombre" ? "name" : undefined}
+                    maxLength={c.tipo === "telefono" ? 20 : 80}
+                  />
+                )}
+              </div>
+            );
+          })}
           <Button
             onClick={enviar}
-            disabled={!nombre.trim() || !direccion.trim() || !telefono.trim()}
+            disabled={faltan.length > 0}
             size="lg"
             className="w-full bg-[#25D366] text-[#073B1F] font-bold hover:bg-[#20BD5A]"
           >
             <WhatsAppIcon className="h-4 w-4 mr-2" /> Enviar por WhatsApp
           </Button>
+          {faltan.length > 0 && (
+            <p className="text-xs text-center text-muted-foreground">Falta: {faltan.map((c) => c.etiqueta).join(", ")}</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>
