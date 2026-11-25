@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, Plus, Minus, Trash2, ImageOff, Send, Settings } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Trash2, ImageOff, Settings } from "lucide-react";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -444,7 +445,7 @@ function CartSheet({
             <span className="font-display font-bold text-primary">{formatCOP(subtotal)}</span>
           </div>
           <Button onClick={onCheckout} size="lg" className="w-full bg-gradient-brand text-brand-foreground hover:opacity-95">
-            <Send className="h-4 w-4 mr-2" />
+            <WhatsAppIcon className="h-4 w-4 mr-2" />
             Enviar pedido por WhatsApp
           </Button>
         </div>
@@ -554,7 +555,7 @@ Total: ${formatCOP(subtotal)}`;
             size="lg"
             className="w-full bg-gradient-brand text-brand-foreground"
           >
-            <Send className="h-4 w-4 mr-2" /> Enviar por WhatsApp
+            <WhatsAppIcon className="h-4 w-4 mr-2" /> Enviar por WhatsApp
           </Button>
         </div>
       </DialogContent>

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { MessageCircle, Share2, UtensilsCrossed } from "lucide-react";
-import { LOGO_URL } from "@/lib/brand";
+import { Share2, UtensilsCrossed } from "lucide-react";
+import { WhatsAppIcon } from "@/components/whatsapp-icon";
+import { LOGO_OSCURO_URL } from "@/lib/brand";
 
 export const Route = createFileRoute("/links")({
   head: () => ({
@@ -61,13 +62,13 @@ function LinksPage() {
           </button>
         </div>
 
-        <header className="flex flex-col items-center text-center mt-2">
-          <div className="h-32 w-32 rounded-full bg-[#EE7F1A] flex items-center justify-center shadow-xl overflow-hidden">
-            <img src={LOGO_URL} alt="Los Buñuelos Los Originales" className="h-28 w-auto object-contain" />
-          </div>
-          <h1 className="mt-5 font-display text-2xl sm:text-3xl font-extrabold tracking-wide uppercase">
-            Buñuelos Los Originales
-          </h1>
+        <header className="flex flex-col items-center text-center mt-4">
+          <h1 className="sr-only">Buñuelos Los Originales</h1>
+          <img
+            src={LOGO_OSCURO_URL}
+            alt="Los Buñuelos Los Originales"
+            className="w-full max-w-sm h-auto drop-shadow-xl"
+          />
         </header>
 
         <nav className="mt-8 space-y-4">
@@ -88,7 +89,7 @@ function LinksPage() {
               rel="noopener noreferrer"
               className="flex items-center gap-4 rounded-xl bg-[#D9731B] hover:bg-[#E37F25] px-5 py-4 shadow-lg transition active:scale-[0.98]"
             >
-              <MessageCircle className="h-6 w-6 shrink-0 fill-white/20" />
+              <WhatsAppIcon className="h-7 w-7 shrink-0" />
               <span className="flex-1 text-center font-semibold text-base sm:text-lg">{b.label}</span>
               <span className="w-6 shrink-0" aria-hidden />
             </a>

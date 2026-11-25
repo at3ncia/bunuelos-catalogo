@@ -101,10 +101,17 @@ function lsSave(state: AppState) {
 
 export async function loadStateFromSupabase(): Promise<AppState> {
   try {
-    const [configRes, catRes, prodRes] = await Promise.all([
-      supabase.from("config").select("*").eq("id", 1).single(),
-      supabase.from("categorias").select("*").order("orden"),
-      supabase.from("productos").select("*"),
+    // Si Supabase no responde en 8 s, usamos la copia local para no dejar la pantalla cargando.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Tiempo de espera agotado")), 8000),
+    );
+    const [configRes, catRes, prodRes] = await Promise.race([
+      Promise.all([
+        supabase.from("config").select("*").eq("id", 1).single(),
+        supabase.from("categorias").select("*").order("orden"),
+        supabase.from("productos").select("*"),
+      ]),
+      timeout,
     ]);
 
     if (configRes.error || catRes.error || prodRes.error) {
