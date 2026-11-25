@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SedeRouteImport } from './routes/sede'
 import { Route as PoliticaDePrivacidadYUsoDeDatosRouteImport } from './routes/politica-de-privacidad-y-uso-de-datos'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SedeRoute = SedeRouteImport.update({
+  id: '/sede',
+  path: '/sede',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PoliticaDePrivacidadYUsoDeDatosRoute =
   PoliticaDePrivacidadYUsoDeDatosRouteImport.update({
     id: '/politica-de-privacidad-y-uso-de-datos',
@@ -34,34 +40,50 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/politica-de-privacidad-y-uso-de-datos': typeof PoliticaDePrivacidadYUsoDeDatosRoute
+  '/sede': typeof SedeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/politica-de-privacidad-y-uso-de-datos': typeof PoliticaDePrivacidadYUsoDeDatosRoute
+  '/sede': typeof SedeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/politica-de-privacidad-y-uso-de-datos': typeof PoliticaDePrivacidadYUsoDeDatosRoute
+  '/sede': typeof SedeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/politica-de-privacidad-y-uso-de-datos'
+  fullPaths: '/' | '/admin' | '/politica-de-privacidad-y-uso-de-datos' | '/sede'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/politica-de-privacidad-y-uso-de-datos'
-  id: '__root__' | '/' | '/admin' | '/politica-de-privacidad-y-uso-de-datos'
+  to: '/' | '/admin' | '/politica-de-privacidad-y-uso-de-datos' | '/sede'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/politica-de-privacidad-y-uso-de-datos'
+    | '/sede'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   PoliticaDePrivacidadYUsoDeDatosRoute: typeof PoliticaDePrivacidadYUsoDeDatosRoute
+  SedeRoute: typeof SedeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sede': {
+      id: '/sede'
+      path: '/sede'
+      fullPath: '/sede'
+      preLoaderRoute: typeof SedeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/politica-de-privacidad-y-uso-de-datos': {
       id: '/politica-de-privacidad-y-uso-de-datos'
       path: '/politica-de-privacidad-y-uso-de-datos'
@@ -90,6 +112,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   PoliticaDePrivacidadYUsoDeDatosRoute: PoliticaDePrivacidadYUsoDeDatosRoute,
+  SedeRoute: SedeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
