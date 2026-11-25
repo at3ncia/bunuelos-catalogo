@@ -37,10 +37,11 @@ export async function listarSedes(): Promise<Sede[]> {
   return (data ?? []) as Sede[];
 }
 
-// Disponibilidad por sede: { [productoId]: boolean }. Sin fila = disponible.
+// Disponibilidad efectiva por sede (los agotados de días anteriores ya cuentan como disponibles).
+// { [productoId]: boolean }. Sin fila = disponible.
 export async function disponibilidadSede(sedeId: number): Promise<Record<string, boolean>> {
   const { data, error } = await supabase
-    .from("sede_productos")
+    .from("sede_disponibilidad")
     .select("producto_id, disponible")
     .eq("sede_id", sedeId);
   if (error) throw new Error(error.message);

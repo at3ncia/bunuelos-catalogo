@@ -27,7 +27,6 @@ import {
   type Sede,
 } from "@/lib/sedes";
 import { LOGO_OSCURO_URL, FONDO_MANCHAS, AZUL_MARCA } from "@/lib/brand";
-import { Switch } from "@/components/ui/switch";
 
 export const Route = createFileRoute("/sede")({
   head: () => ({
@@ -41,15 +40,60 @@ export const Route = createFileRoute("/sede")({
 
 type Sesion = { sede: Sede; clave: string };
 
+// La sesión queda guardada en el equipo de la sede para que el personal
+// no tenga que escribir la contraseña cada día. "Salir" la borra.
+const CLAVE_SESION = "sesionSede";
+
+function leerSesionGuardada(): { sedeId: number; clave: string } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_SESION) ?? "null");
+    return v && typeof v.sedeId === "number" && typeof v.clave === "string" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarSesion(s: Sesion | null) {
+  try {
+    if (s) localStorage.setItem(CLAVE_SESION, JSON.stringify({ sedeId: s.sede.id, clave: s.clave }));
+    else localStorage.removeItem(CLAVE_SESION);
+  } catch {
+    /* sin almacenamiento: se pedirá la contraseña la próxima vez */
+  }
+}
+
 function SedePage() {
   const [sedes, setSedes] = useState<Sede[]>([]);
-  const [sesion, setSesion] = useState<Sesion | null>(null);
+  const [sesion, setSesionEstado] = useState<Sesion | null>(null);
+  const [restaurando, setRestaurando] = useState(() => leerSesionGuardada() !== null);
+
+  const setSesion = (s: Sesion | null) => {
+    setSesionEstado(s);
+    guardarSesion(s);
+  };
 
   useEffect(() => {
     listarSedes()
       .then((l) => setSedes(l.length ? l : SEDES_RESPALDO))
       .catch(() => setSedes(SEDES_RESPALDO));
   }, []);
+
+  // Reingreso automático con la sesión guardada (se verifica la contraseña)
+  useEffect(() => {
+    const guardada = leerSesionGuardada();
+    if (!guardada || sedes.length === 0) return;
+    const sede = sedes.find((x) => x.id === guardada.sedeId);
+    if (!sede) {
+      setSesion(null);
+      setRestaurando(false);
+      return;
+    }
+    loginSede(sede.id, guardada.clave).then((r) => {
+      if (r.ok) setSesionEstado({ sede, clave: guardada.clave });
+      else guardarSesion(null);
+      setRestaurando(false);
+    });
+  }, [sedes]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,7 +102,11 @@ function SedePage() {
         onSalir={() => setSesion(null)}
       />
       <main className="max-w-2xl mx-auto px-4 -mt-6 pb-16 relative">
-        {sesion ? (
+        {restaurando ? (
+          <Tarjeta className="flex items-center justify-center gap-2 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" /> Ingresando…
+          </Tarjeta>
+        ) : sesion ? (
           <Panel sesion={sesion} onClave={(clave) => setSesion({ ...sesion, clave })} />
         ) : (
           <LoginSede sedes={sedes} onOk={(sede, clave) => setSesion({ sede, clave })} />
@@ -314,14 +362,14 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
       <div className="grid grid-cols-2 gap-3">
         <Resumen
           valor={totalDisp}
-          etiqueta="Disponibles"
+          etiqueta="Hay"
           activo={filtro === "disponibles"}
           onClick={() => setFiltro((f) => (f === "disponibles" ? "todos" : "disponibles"))}
           tono="disponible"
         />
         <Resumen
           valor={totalAgot}
-          etiqueta="Agotados"
+          etiqueta="Se acabó hoy"
           activo={filtro === "agotados"}
           onClick={() => setFiltro((f) => (f === "agotados" ? "todos" : "agotados"))}
           tono="agotado"
@@ -336,6 +384,10 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
           </button>
         </div>
       )}
+
+      <p className="rounded-xl bg-primary/10 text-primary text-sm px-4 py-3">
+        <strong>Toca un producto cuando se acabe.</strong> Todo vuelve a estar disponible solo cada día a las 4:00 a.&nbsp;m.
+      </p>
 
       <Tarjeta sinPadding className="overflow-hidden">
         {/* Buscador + filtro activo */}
@@ -354,7 +406,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
               onClick={() => setFiltro("todos")}
               className="h-10 shrink-0 rounded-lg bg-primary/10 text-primary px-3 text-sm font-semibold inline-flex items-center gap-1"
             >
-              {filtro === "disponibles" ? "Disponibles" : "Agotados"} <X className="h-3.5 w-3.5" />
+              {filtro === "disponibles" ? "Hay" : "Se acabó hoy"} <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
@@ -441,39 +493,38 @@ function FilaProducto({
   onCambiar: (v: boolean) => void;
 }) {
   return (
-    <li
-      className={`flex items-center gap-3 px-4 py-3 transition-colors ${
-        disponible ? "bg-card" : "bg-muted/60"
-      }`}
-    >
-      {/* Barra lateral de estado: azul disponible, naranja agotado */}
-      <span
-        aria-hidden
-        className={`self-stretch w-1 rounded-full ${disponible ? "bg-primary" : "bg-secondary"}`}
-      />
-      <div className="flex-1 min-w-0">
-        <p className={`font-semibold truncate ${disponible ? "text-foreground" : "text-muted-foreground line-through"}`}>
-          {producto.nombre}
-        </p>
-        <p className="text-xs text-muted-foreground flex items-center gap-2">
-          {formatCOP(producto.precio)}
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
-              disponible ? "bg-primary/10 text-primary" : "bg-[#FBE3CC] text-[#9A4708]"
-            }`}
-          >
-            {disponible ? "Disponible" : "Agotado"}
+    <li>
+      <button
+        type="button"
+        onClick={() => onCambiar(!disponible)}
+        disabled={estado === "guardando"}
+        aria-pressed={!disponible}
+        aria-label={`${producto.nombre}: ${disponible ? "hay. Toca si se acabó" : "se acabó hoy. Toca si volvió"}`}
+        className={`w-full flex items-center gap-3 px-4 py-4 text-left transition-colors active:scale-[0.99] ${
+          disponible ? "bg-card hover:bg-primary/5" : "bg-[#FDF1E6] hover:bg-[#FBE7D3]"
+        }`}
+      >
+        {/* Barra lateral de estado: azul hay, naranja se acabó */}
+        <span aria-hidden className={`self-stretch w-1.5 rounded-full ${disponible ? "bg-primary" : "bg-secondary"}`} />
+        <span className="flex-1 min-w-0">
+          <span className={`block font-semibold text-base truncate ${disponible ? "text-foreground" : "text-muted-foreground line-through"}`}>
+            {producto.nombre}
           </span>
-          {estado === "guardando" && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Guardando" />}
-          {estado === "ok" && <Check className="h-3.5 w-3.5 text-primary" aria-label="Guardado" />}
-        </p>
-      </div>
-      <Switch
-        checked={disponible}
-        onCheckedChange={onCambiar}
-        aria-label={`${producto.nombre}: ${disponible ? "disponible" : "agotado"}`}
-        className="scale-125 data-[state=unchecked]:bg-secondary/60"
-      />
+          <span className="block text-xs text-muted-foreground">{formatCOP(producto.precio)}</span>
+        </span>
+        <span
+          className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold ${
+            disponible ? "bg-primary/10 text-primary" : "bg-[#B5560B] text-white"
+          }`}
+        >
+          {estado === "guardando" ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-label="Guardando" />
+          ) : estado === "ok" ? (
+            <Check className="h-4 w-4" aria-label="Guardado" />
+          ) : null}
+          {disponible ? "Hay" : "Se acabó hoy"}
+        </span>
+      </button>
     </li>
   );
 }
