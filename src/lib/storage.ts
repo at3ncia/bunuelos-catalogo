@@ -19,6 +19,21 @@ export type BusinessConfig = {
   nombre: string;
   whatsapp: string; // formato internacional sin + (ej: 573001112233)
   logo: string;
+  /** Icono de la pestaña del navegador (data URL o URL). Vacío = el predeterminado. */
+  favicon: string;
+  /** Imagen que aparece al compartir el link (WhatsApp, Facebook…). */
+  ogImage: string;
+  /** Título de la página y de la vista previa al compartir. */
+  metaTitle: string;
+  /** Descripción de la página y de la vista previa al compartir. */
+  metaDescription: string;
+};
+
+export const DEFAULT_META = {
+  title: "Los Buñuelos Los Originales — Pide en línea",
+  description: "🧡Kiosco los buñuelos los originales + de 10 años en el mercado",
+  favicon: "/favicon.png",
+  ogImage: "/og-image.png",
 };
 
 export type AppState = {
@@ -43,6 +58,10 @@ export const DEFAULT_STATE: AppState = {
     nombre: "Los Buñuelos Los Originales",
     whatsapp: "573001234567",
     logo: "",
+    favicon: "",
+    ogImage: "",
+    metaTitle: "",
+    metaDescription: "",
   },
   categorias: DEFAULT_CATEGORIES,
   productos: [
@@ -85,7 +104,10 @@ const LS_KEY = "bunuelos_app_v1";
 function lsLoad(): AppState | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? (JSON.parse(raw) as AppState) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AppState;
+    // Cachés antiguas no tienen los campos nuevos de config
+    return { ...parsed, config: { ...DEFAULT_STATE.config, ...parsed.config } };
   } catch {
     return null;
   }
@@ -114,6 +136,8 @@ export async function loadStateFromSupabase(): Promise<AppState> {
 
     const raw = configRes.data as {
       nombre: string; whatsapp: string; logo: string;
+      favicon?: string | null; og_image?: string | null;
+      meta_title?: string | null; meta_description?: string | null;
       admin_user: string; admin_pass: string;
     };
 
@@ -136,7 +160,15 @@ export async function loadStateFromSupabase(): Promise<AppState> {
     }));
 
     const state: AppState = {
-      config: { nombre: raw.nombre, whatsapp: raw.whatsapp, logo: raw.logo ?? "" },
+      config: {
+        nombre: raw.nombre,
+        whatsapp: raw.whatsapp,
+        logo: raw.logo ?? "",
+        favicon: raw.favicon ?? "",
+        ogImage: raw.og_image ?? "",
+        metaTitle: raw.meta_title ?? "",
+        metaDescription: raw.meta_description ?? "",
+      },
       categorias,
       productos,
       adminAuth: { user: raw.admin_user, pass: raw.admin_pass },
@@ -158,14 +190,30 @@ export async function saveStateToSupabase(state: AppState): Promise<void> {
 
   try {
     // Guardar config
-    await supabase.from("config").upsert({
+    const baseConfig = {
       id: 1,
       nombre: state.config.nombre,
       whatsapp: state.config.whatsapp,
       logo: state.config.logo,
       admin_user: state.adminAuth.user,
       admin_pass: state.adminAuth.pass,
+    };
+    const { error: cfgError } = await supabase.from("config").upsert({
+      ...baseConfig,
+      favicon: state.config.favicon,
+      og_image: state.config.ogImage,
+      meta_title: state.config.metaTitle,
+      meta_description: state.config.metaDescription,
     });
+    if (cfgError) {
+      // Si la base aún no tiene las columnas nuevas, guardar al menos lo básico.
+      console.warn(
+        "[Supabase] No se pudieron guardar favicon/metadatos. " +
+          "¿Ejecutaste supabase/migrations/20261125_config_metadata.sql?",
+        cfgError,
+      );
+      await supabase.from("config").upsert(baseConfig);
+    }
 
     // Sincronizar categorías: eliminar las que ya no están, insertar/actualizar nuevas
     const catIds = state.categorias.map((c) => c.id);

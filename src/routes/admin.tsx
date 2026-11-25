@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { useAppState } from "@/lib/app-store";
-import { uid, type Product, type Category } from "@/lib/storage";
+import { uid, DEFAULT_META, type Product, type Category } from "@/lib/storage";
+import { processImage, IMAGE_FORMATS } from "@/lib/image";
+import { ImagePicker } from "@/components/image-picker";
 import { formatCOP } from "@/lib/cart";
 import logoAsset from "@/assets/logo-bunuelos.png.asset.json";
 import { Button } from "@/components/ui/button";
@@ -304,14 +306,14 @@ function ProductFormDialog({
   // reset cuando cambia product/open
   useState(() => {});
 
-  const handleFile = (f: File) => {
-    if (f.size > 2 * 1024 * 1024) {
-      alert("La imagen debe ser menor a 2MB");
-      return;
+  const handleFile = async (f: File) => {
+    try {
+      setFoto(await processImage(f, IMAGE_FORMATS.producto));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "No se pudo procesar la imagen");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
     }
-    const reader = new FileReader();
-    reader.onload = () => setFoto(reader.result as string);
-    reader.readAsDataURL(f);
   };
 
   const submit = () => {
@@ -505,70 +507,129 @@ function BusinessTab() {
   const [nombre, setNombre] = useState(state.config.nombre);
   const [whatsapp, setWhatsapp] = useState(state.config.whatsapp);
   const [logo, setLogo] = useState(state.config.logo);
+  const [favicon, setFavicon] = useState(state.config.favicon);
+  const [ogImage, setOgImage] = useState(state.config.ogImage);
+  const [metaTitle, setMetaTitle] = useState(state.config.metaTitle);
+  const [metaDescription, setMetaDescription] = useState(state.config.metaDescription);
   const [saved, setSaved] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleLogo = (f: File) => {
-    if (f.size > 1024 * 1024) {
-      alert("El logo debe ser menor a 1MB");
-      return;
-    }
-    const r = new FileReader();
-    r.onload = () => setLogo(r.result as string);
-    r.readAsDataURL(f);
-  };
 
   const guardar = () => {
-    update((s) => ({ ...s, config: { nombre: nombre.trim(), whatsapp: whatsapp.replace(/\D/g, ""), logo } }));
+    update((s) => ({
+      ...s,
+      config: {
+        nombre: nombre.trim(),
+        whatsapp: whatsapp.replace(/\D/g, ""),
+        logo,
+        favicon,
+        ogImage,
+        metaTitle: metaTitle.trim(),
+        metaDescription: metaDescription.trim(),
+      },
+    }));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const previewTitle = metaTitle.trim() || DEFAULT_META.title;
+  const previewDesc = metaDescription.trim() || DEFAULT_META.description;
+
   return (
-    <div className="space-y-4 max-w-xl">
-      <h2 className="font-display text-lg font-bold">Configuración del negocio</h2>
-      <div>
-        <Label>Logo personalizado (opcional)</Label>
-        <div className="mt-1 flex items-center gap-3">
-          <div className="h-16 w-32 rounded-lg bg-muted overflow-hidden flex items-center justify-center p-1">
-            <img src={logo || logoAsset.url} alt="" className="max-h-full max-w-full object-contain" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-              Subir logo
-            </Button>
-            {logo && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setLogo("")}>
-                Restaurar predeterminado
-              </Button>
-            )}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => e.target.files?.[0] && handleLogo(e.target.files[0])}
-            />
+    <div className="space-y-8 max-w-xl">
+      <section className="space-y-4">
+        <h2 className="font-display text-lg font-bold">Configuración del negocio</h2>
+        <ImagePicker
+          label="Logo"
+          hint="Se muestra arriba del catálogo. PNG con fondo transparente se ve mejor."
+          value={logo}
+          fallback={logoAsset.url}
+          format={IMAGE_FORMATS.logo}
+          onChange={setLogo}
+          previewClassName="h-16 w-32 p-1"
+          resetLabel="Restaurar predeterminado"
+        />
+        <div>
+          <Label htmlFor="bn">Nombre del negocio</Label>
+          <Input id="bn" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={60} />
+        </div>
+        <div>
+          <Label htmlFor="wa">WhatsApp (con código de país, sin +)</Label>
+          <Input
+            id="wa"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(e.target.value)}
+            placeholder="573001112233"
+            inputMode="tel"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Ej: 573001112233 (Colombia +57). Aquí llegarán los pedidos.
+          </p>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-display text-lg font-bold">Pestaña y vista previa al compartir</h2>
+          <p className="text-sm text-muted-foreground">
+            Lo que se ve en la pestaña del navegador y cuando alguien comparte el link por WhatsApp,
+            Facebook o Instagram. Si dejas un campo vacío se usa el predeterminado.
+          </p>
+        </div>
+        <ImagePicker
+          label="Icono de la pestaña (favicon)"
+          hint="Se recorta en cuadrado automáticamente. Usa una imagen simple y centrada."
+          value={favicon}
+          fallback={DEFAULT_META.favicon}
+          format={IMAGE_FORMATS.favicon}
+          onChange={setFavicon}
+          previewClassName="h-16 w-16"
+          resetLabel="Restaurar predeterminado"
+        />
+        <ImagePicker
+          label="Imagen al compartir el link"
+          hint="Se recorta automáticamente a formato horizontal (1200×630). Deja lo importante en el centro."
+          value={ogImage}
+          fallback={DEFAULT_META.ogImage}
+          format={IMAGE_FORMATS.compartir}
+          onChange={setOgImage}
+          previewClassName="h-[84px] w-40"
+          resetLabel="Restaurar predeterminado"
+        />
+        <div>
+          <Label htmlFor="mt">Título</Label>
+          <Input
+            id="mt"
+            value={metaTitle}
+            onChange={(e) => setMetaTitle(e.target.value)}
+            placeholder={DEFAULT_META.title}
+            maxLength={70}
+          />
+          <p className="text-xs text-muted-foreground mt-1">{metaTitle.length}/70 · Ideal: menos de 60 caracteres.</p>
+        </div>
+        <div>
+          <Label htmlFor="md">Descripción</Label>
+          <Textarea
+            id="md"
+            value={metaDescription}
+            onChange={(e) => setMetaDescription(e.target.value)}
+            placeholder={DEFAULT_META.description}
+            maxLength={160}
+            rows={2}
+          />
+          <p className="text-xs text-muted-foreground mt-1">{metaDescription.length}/160</p>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground mb-1">Vista previa al compartir</p>
+          <div className="rounded-xl overflow-hidden border border-border bg-card max-w-sm">
+            <img src={ogImage || DEFAULT_META.ogImage} alt="" className="w-full aspect-[1200/630] object-cover" />
+            <div className="p-3">
+              <p className="font-semibold text-sm line-clamp-2">{previewTitle}</p>
+              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{previewDesc}</p>
+            </div>
           </div>
         </div>
-      </div>
-      <div>
-        <Label htmlFor="bn">Nombre del negocio</Label>
-        <Input id="bn" value={nombre} onChange={(e) => setNombre(e.target.value)} maxLength={60} />
-      </div>
-      <div>
-        <Label htmlFor="wa">WhatsApp (con código de país, sin +)</Label>
-        <Input
-          id="wa"
-          value={whatsapp}
-          onChange={(e) => setWhatsapp(e.target.value)}
-          placeholder="573001112233"
-          inputMode="tel"
-        />
-        <p className="text-xs text-muted-foreground mt-1">
-          Ej: 573001112233 (Colombia +57). Aquí llegarán los pedidos.
-        </p>
-      </div>
+      </section>
+
       <div className="flex items-center gap-3">
         <Button onClick={guardar} className="bg-gradient-brand text-brand-foreground">
           Guardar cambios

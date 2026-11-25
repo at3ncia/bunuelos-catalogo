@@ -4,6 +4,7 @@ import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
 import logoAsset from "@/assets/logo-bunuelos.png.asset.json";
+import { useDocumentMeta } from "@/lib/use-document-meta";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,8 @@ function CatalogPage() {
     () => state.productos.filter((p) => p.disponible && (activeCat === "todos" || p.categoriaId === activeCat)),
     [state.productos, activeCat],
   );
+
+  useDocumentMeta(state.config, !loading);
 
   const logoUrl = state.config.logo || logoAsset.url;
 
