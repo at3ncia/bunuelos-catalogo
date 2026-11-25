@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listarSedes, disponibilidadSede, type Sede } from "@/lib/sedes";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
@@ -35,11 +36,49 @@ function CatalogPage() {
   const [selected, setSelected] = useState<Product | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [sedes, setSedes] = useState<Sede[]>([]);
+  const [sedeId, setSedeId] = useState<number | null>(() => {
+    try {
+      const v = Number(localStorage.getItem("sedeSeleccionada"));
+      return v || null;
+    } catch {
+      return null;
+    }
+  });
+  const [dispSede, setDispSede] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    listarSedes()
+      .then((lista) => {
+        setSedes(lista);
+        setSedeId((actual) => actual ?? lista[0]?.id ?? null);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!sedeId) return;
+    try {
+      localStorage.setItem("sedeSeleccionada", String(sedeId));
+    } catch {}
+    disponibilidadSede(sedeId)
+      .then(setDispSede)
+      .catch(() => setDispSede({}));
+  }, [sedeId]);
+
+  const sedeActual = sedes.find((s) => s.id === sedeId) ?? null;
+  const whatsappPedido = sedeActual?.whatsapp || state.config.whatsapp;
 
   // ⚠️ Todos los hooks deben ir ANTES de cualquier return condicional
   const visibles = useMemo(
-    () => state.productos.filter((p) => p.disponible && (activeCat === "todos" || p.categoriaId === activeCat)),
-    [state.productos, activeCat],
+    () =>
+      state.productos.filter(
+        (p) =>
+          p.disponible &&
+          (dispSede[p.id] ?? true) &&
+          (activeCat === "todos" || p.categoriaId === activeCat),
+      ),
+    [state.productos, activeCat, dispSede],
   );
 
   const logoUrl = state.config.logo || logoAsset.url;
@@ -95,6 +134,20 @@ function CatalogPage() {
             />
           </Sheet>
         </div>
+
+        {/* Selector de sede */}
+        {sedes.length > 0 && (
+          <div className="max-w-5xl mx-auto px-4 pb-2 overflow-x-auto">
+            <div className="flex gap-2 min-w-max items-center">
+              <span className="text-xs text-muted-foreground mr-1">Sede:</span>
+              {sedes.map((s) => (
+                <CategoryPill key={s.id} active={sedeId === s.id} onClick={() => setSedeId(s.id)}>
+                  {s.nombre.replace("Cartagena · ", "").replace("Barranquilla · ", "")}
+                </CategoryPill>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Category bar */}
         <div className="max-w-5xl mx-auto px-4 pb-3 overflow-x-auto">
@@ -172,7 +225,7 @@ function CatalogPage() {
         onOpenChange={setCheckoutOpen}
         items={cart.items}
         subtotal={cart.subtotal}
-        whatsapp={state.config.whatsapp}
+        whatsapp={whatsappPedido}
         onSent={() => {
           cart.clear();
           setCheckoutOpen(false);
