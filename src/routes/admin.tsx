@@ -114,7 +114,7 @@ function AdminPage() {
           </div>
         </div>
       </header>
-      <main className="max-w-3xl mx-auto px-4 -mt-6 pb-24 relative">
+      <main className="max-w-3xl mx-auto px-4 -mt-6 pb-36 relative">
         {clave ? <Panel clave={clave} onClaveCambiada={entrar} onSalir={salir} /> : <Login onOk={entrar} />}
       </main>
     </div>
@@ -284,7 +284,7 @@ function Panel({
       {aviso && (
         <div
           role="status"
-          className={`fixed bottom-4 left-4 right-4 mx-auto max-w-md z-50 rounded-2xl px-4 py-3 shadow-card font-semibold text-sm flex items-center gap-2 ${
+          className={`fixed bottom-[4.5rem] left-4 right-4 mx-auto max-w-md z-50 rounded-2xl px-4 py-3 shadow-card font-semibold text-sm flex items-center gap-2 ${
             aviso.tipo === "ok" ? "bg-primary text-primary-foreground" : "bg-destructive text-white"
           }`}
         >
@@ -890,7 +890,7 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
         </select>
       </Tarjeta>
 
-      <div className="sticky bottom-4 z-10">
+      <div className="sticky bottom-[4.5rem] z-10">
         <button
           type="submit"
           disabled={guardando || sinCambios || mediosPago.length === 0}

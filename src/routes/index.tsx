@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ShoppingCart, Plus, Minus, Trash2, Settings } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Trash2 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 
 export const Route = createFileRoute("/")({
@@ -62,7 +62,19 @@ function CatalogPage() {
   });
   const [dispSede, setDispSede] = useState<Record<string, boolean>>({});
 
-  const [selectorAbierto, setSelectorAbierto] = useState(false);
+  // "?elegir" (botón Menú domicilios de /links) abre siempre el selector de ciudad
+  const [selectorAbierto, setSelectorAbierto] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (!params.has("elegir")) return false;
+      params.delete("elegir");
+      const resto = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (resto ? `?${resto}` : ""));
+      return true;
+    } catch {
+      return false;
+    }
+  });
   const [puntos, setPuntos] = useState<PuntoPedido[]>([]);
   const [puntoId, setPuntoId] = useState<string | null>(() => {
     try {
@@ -170,13 +182,6 @@ function CatalogPage() {
           <div className="flex items-center gap-3">
             <img src={LOGO_OSCURO_URL} alt={state.config.nombre} className="h-12 sm:h-14 w-auto drop-shadow-lg" />
             <div className="flex-1" />
-            <Link
-              to="/sede"
-              aria-label="Gestión de disponibilidad"
-              className="p-2 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition"
-            >
-              <Settings className="h-5 w-5" />
-            </Link>
             <Sheet open={cartOpen} onOpenChange={setCartOpen}>
               <SheetTrigger asChild>
                 <button
@@ -326,7 +331,7 @@ function CatalogPage() {
       {cart.count > 0 && (
         <button
           onClick={() => setCartOpen(true)}
-          className="fixed bottom-4 left-4 right-4 mx-auto max-w-md z-20 bg-primary text-primary-foreground rounded-full pl-5 pr-2 py-2 shadow-card flex items-center justify-between font-semibold"
+          className="fixed bottom-[4.5rem] left-4 right-4 mx-auto max-w-md z-20 bg-primary text-primary-foreground rounded-full pl-5 pr-2 py-2 shadow-card flex items-center justify-between font-semibold"
         >
           <span className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5" /> Ver pedido · {cart.count} {cart.count === 1 ? "producto" : "productos"}
@@ -389,7 +394,7 @@ function CatalogPage() {
           </div>
         </div>
         <div className="border-t border-white/15">
-          <div className={`max-w-5xl mx-auto px-4 pt-4 ${cart.count > 0 ? "pb-28" : "pb-6"} flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/70`}>
+          <div className={`max-w-5xl mx-auto px-4 pt-4 ${cart.count > 0 ? "pb-44" : "pb-20"} flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-white/70`}>
             <span>© {new Date().getFullYear()} {state.config.nombre}</span>
             <Link to="/politica-de-privacidad-y-uso-de-datos" className="hover:text-white underline underline-offset-4">
               Política de Privacidad y Uso de Datos
@@ -754,10 +759,8 @@ function SelectorSede({
 }) {
   const puntosDe = (id: number) => puntos.filter((p) => p.sede_id === id);
   // Si ya eligió ciudad pero falta el punto, abrimos directo en el paso 2
-  const [sedePaso2, setSedePaso2] = useState<Sede | null>(() => {
-    const s = sedes.find((x) => x.id === actualSede);
-    return s && puntosDe(s.id).length > 1 && !actualPunto ? s : null;
-  });
+  // Siempre se empieza eligiendo la ciudad; los puntos vienen después
+  const [sedePaso2, setSedePaso2] = useState<Sede | null>(null);
 
   const ciudades = Array.from(new Set(sedes.map((s) => s.ciudad)));
   const porCiudad = esPorCiudad(sedes);

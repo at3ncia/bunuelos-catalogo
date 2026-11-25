@@ -49,7 +49,7 @@ function LinksPage() {
 
   return (
     <div
-      className="min-h-screen text-white flex items-start justify-center py-10 px-4"
+      className="min-h-screen text-white flex items-start justify-center pt-10 pb-24 px-4"
       style={{ backgroundColor: AZUL_MARCA, backgroundImage: FONDO_MANCHAS, backgroundSize: "340px 340px" }}
     >
       <div className="w-full max-w-md">
@@ -74,7 +74,7 @@ function LinksPage() {
 
         <nav className="mt-8 space-y-4">
           <a
-            href="/"
+            href="/?elegir"
             className="btn-dorado flex items-center gap-4 rounded-xl px-5 py-4 shadow-lg transition active:scale-[0.98] hover:brightness-105"
           >
             <UtensilsCrossed className="h-6 w-6 shrink-0" />

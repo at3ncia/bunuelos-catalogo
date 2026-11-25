@@ -103,7 +103,7 @@ function SedePage() {
         sesion={sesion}
         onSalir={() => setSesion(null)}
       />
-      <main className="max-w-2xl mx-auto px-4 -mt-6 pb-16 relative">
+      <main className="max-w-2xl mx-auto px-4 -mt-6 pb-24 relative">
         {restaurando ? (
           <Tarjeta className="flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" /> Ingresando…
