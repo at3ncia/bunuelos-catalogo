@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -18,6 +18,8 @@ import {
   Bike,
   ClipboardList,
   Megaphone,
+  GripVertical,
+  ListPlus,
   Package,
   Pause,
   Pencil,
@@ -1261,28 +1263,69 @@ function PestanaDomicilios({ datos, clave, ejecutar }: PropsPestana) {
 
 function PestanaCategorias({ datos, clave, ejecutar }: PropsPestana) {
   const [nueva, setNueva] = useState("");
-  const cats = datos.categorias;
+  // Orden local: se mueve al instante mientras se arrastra y se guarda al soltar
+  const [cats, setCats] = useState(datos.categorias);
+  useEffect(() => setCats(datos.categorias), [datos.categorias]);
+  const [arrastrando, setArrastrando] = useState<string | null>(null);
+  const [agregarEn, setAgregarEn] = useState<Category | null>(null);
+  const listaRef = useRef<HTMLUListElement>(null);
 
-  const mover = async (i: number, dir: -1 | 1) => {
+  const guardarOrden = async (lista: (Category & { orden: number })[]) => {
+    const original = (id: string) => datos.categorias.find((x) => x.id === id)?.orden;
+    const cambios = lista.map((c, k) => ({ ...c, orden: k })).filter((c) => c.orden !== original(c.id));
+    if (!cambios.length) return;
+    const rs = await Promise.all(cambios.map((c) => guardarCategoria(clave, c)));
+    const fallo = rs.find((r) => !r.ok);
+    await ejecutar(Promise.resolve(fallo ?? { ok: true }), "Orden actualizado");
+  };
+
+  const mover = (i: number, dir: -1 | 1) => {
     const j = i + dir;
     if (j < 0 || j >= cats.length) return;
-    // Reasigna el orden de todas para que quede limpio (0, 1, 2…)
     const nuevas = [...cats];
     [nuevas[i], nuevas[j]] = [nuevas[j], nuevas[i]];
-    for (let k = 0; k < nuevas.length; k++) {
-      if (nuevas[k].orden !== k) await guardarCategoria(clave, { ...nuevas[k], orden: k });
+    setCats(nuevas);
+    guardarOrden(nuevas);
+  };
+
+  // Arrastre con el dedo o el mouse desde el agarre de 6 puntos
+  const empezarArrastre = (e: React.PointerEvent, id: string) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setArrastrando(id);
+  };
+  const moverArrastre = (e: React.PointerEvent) => {
+    if (!arrastrando || !listaRef.current) return;
+    const filas = Array.from(listaRef.current.children) as HTMLElement[];
+    const desde = cats.findIndex((c) => c.id === arrastrando);
+    let hacia = desde;
+    filas.forEach((f, k) => {
+      const r = f.getBoundingClientRect();
+      if (k < desde && e.clientY < r.top + r.height / 2) hacia = Math.min(hacia, k);
+      if (k > desde && e.clientY > r.top + r.height / 2) hacia = Math.max(hacia, k);
+    });
+    if (hacia !== desde) {
+      const nuevas = [...cats];
+      const [x] = nuevas.splice(desde, 1);
+      nuevas.splice(hacia, 0, x);
+      setCats(nuevas);
     }
-    await ejecutar(Promise.resolve({ ok: true }), "Orden actualizado");
+  };
+  const soltarArrastre = () => {
+    if (!arrastrando) return;
+    setArrastrando(null);
+    guardarOrden(cats);
   };
 
   return (
     <div className="space-y-4">
       <Tarjeta>
         <p className="text-sm text-muted-foreground">
-          El orden y el color de cada categoría se usan en el catálogo (secciones y tarjetas sin foto).
+          El orden y el color de cada categoría se usan en el catálogo. Arrastra desde <GripVertical className="inline h-4 w-4 -mt-0.5" /> para
+          reordenar y toca <strong>Productos</strong> para agregar varios de una vez.
         </p>
       </Tarjeta>
-      <ul className="space-y-2">
+      <ul ref={listaRef} className="space-y-2" onPointerMove={moverArrastre} onPointerUp={soltarArrastre} onPointerCancel={soltarArrastre}>
         {cats.map((c, i) => (
           <FilaCategoria
             key={c.id}
@@ -1291,7 +1334,10 @@ function PestanaCategorias({ datos, clave, ejecutar }: PropsPestana) {
             productos={datos.productos.filter((p) => p.categoriaId === c.id).length}
             primera={i === 0}
             ultima={i === cats.length - 1}
+            arrastrando={arrastrando === c.id}
+            onAgarrar={(e) => empezarArrastre(e, c.id)}
             onMover={(dir) => mover(i, dir)}
+            onAgregar={() => setAgregarEn(c)}
             onGuardar={(cambios) => ejecutar(guardarCategoria(clave, { ...c, ...cambios }), "Categoría guardada")}
             onBorrar={() => ejecutar(borrarCategoria(clave, c.id), "Categoría borrada")}
           />
@@ -1315,7 +1361,150 @@ function PestanaCategorias({ datos, clave, ejecutar }: PropsPestana) {
           Crear
         </button>
       </form>
+
+      <AgregarProductos
+        categoria={agregarEn}
+        categorias={cats}
+        productos={datos.productos}
+        onCerrar={() => setAgregarEn(null)}
+        onGuardar={async (ids) => {
+          if (!agregarEn) return;
+          const mover = datos.productos.filter((p) => ids.includes(p.id) && p.categoriaId !== agregarEn.id);
+          const rs = await Promise.all(mover.map((p) => guardarProducto(clave, { ...p, categoriaId: agregarEn.id })));
+          const fallo = rs.find((r) => !r.ok);
+          const ok = await ejecutar(
+            Promise.resolve(fallo ?? { ok: true }),
+            `${mover.length} producto${mover.length === 1 ? "" : "s"} en "${agregarEn.nombre}"`,
+          );
+          if (ok) setAgregarEn(null);
+        }}
+      />
     </div>
+  );
+}
+
+// Elegir varios productos para pasarlos a una categoría (buscador con lupa + filtro por categoría)
+function AgregarProductos({
+  categoria,
+  categorias,
+  productos,
+  onCerrar,
+  onGuardar,
+}: {
+  categoria: Category | null;
+  categorias: Category[];
+  productos: Product[];
+  onCerrar: () => void;
+  onGuardar: (ids: string[]) => Promise<void>;
+}) {
+  const [buscar, setBuscar] = useState("");
+  const [cat, setCat] = useState<string | null>(null);
+  const [elegidos, setElegidos] = useState<string[]>([]);
+  const [guardando, setGuardando] = useState(false);
+  useEffect(() => {
+    setBuscar("");
+    setCat(null);
+    setElegidos([]);
+  }, [categoria]);
+  if (!categoria) return null;
+  const sinTildes = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const q = sinTildes(buscar.trim());
+  const otros = productos.filter((x) => x.categoriaId !== categoria.id);
+  const lista = otros.filter((x) => (!cat || x.categoriaId === cat) && (!q || sinTildes(x.nombre).includes(q)));
+  const yaEstan = productos.filter((x) => x.categoriaId === categoria.id);
+  const filtros = categorias.filter((c) => c.id !== categoria.id && otros.some((x) => x.categoriaId === c.id));
+  const nombreCat = (id: string) => categorias.find((c) => c.id === id)?.nombre ?? "Sin categoría";
+  const alternar = (id: string) => setElegidos((l) => (l.includes(id) ? l.filter((x) => x !== id) : [...l, id]));
+  const todosVisibles = lista.length > 0 && lista.every((x) => elegidos.includes(x.id));
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onCerrar()}>
+      <DialogContent className="max-w-lg max-h-[calc(100dvh-7rem)] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl">Agregar a “{categoria.nombre}”</DialogTitle>
+          <DialogDescription>
+            Marca los productos que quieres pasar a esta categoría. {yaEstan.length ? `Ya tiene ${yaEstan.length}.` : "Aún está vacía."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="relative">
+          <Search className="h-5 w-5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input className={`${INPUT} pl-10`} value={buscar} onChange={(e) => setBuscar(e.target.value)} placeholder="Busca el producto" aria-label="Buscar producto" />
+        </div>
+        {filtros.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {[{ id: null as string | null, nombre: "Todas" }, ...filtros].map((c) => (
+              <button
+                key={c.id ?? "todas"}
+                type="button"
+                aria-pressed={cat === c.id}
+                onClick={() => setCat(c.id)}
+                className={`h-8 px-3 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 ${cat === c.id ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}
+              >
+                {c.nombre}
+              </button>
+            ))}
+          </div>
+        )}
+        {lista.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setElegidos((l) => (todosVisibles ? l.filter((id) => !lista.some((x) => x.id === id)) : [...new Set([...l, ...lista.map((x) => x.id)])]))
+            }
+            className="justify-self-start text-sm font-semibold text-primary"
+          >
+            {todosVisibles ? "Quitar todos" : `Marcar todos (${lista.length})`}
+          </button>
+        )}
+        <ul className="space-y-1">
+          {lista.map((x) => {
+            const marcado = elegidos.includes(x.id);
+            return (
+              <li key={x.id}>
+                <button
+                  type="button"
+                  role="checkbox"
+                  aria-checked={marcado}
+                  onClick={() => alternar(x.id)}
+                  className={`w-full flex items-center gap-3 rounded-xl border-2 p-2 text-left transition ${marcado ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted"}`}
+                >
+                  <span className={`h-6 w-6 shrink-0 rounded-md border-2 flex items-center justify-center ${marcado ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/40"}`}>
+                    {marcado && <Check className="h-4 w-4" />}
+                  </span>
+                  <span className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                    {x.foto ? <img src={x.foto} alt="" className="w-full h-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground" />}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-semibold truncate">{x.nombre}</span>
+                    <span className="block text-xs text-muted-foreground truncate">
+                      {formatCOP(x.precio)} · ahora en {nombreCat(x.categoriaId)}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+          {lista.length === 0 && (
+            <li className="text-center text-sm text-muted-foreground py-6">
+              {otros.length === 0 ? "Todos los productos ya están en esta categoría." : `No hay productos con “${buscar}”.`}
+            </li>
+          )}
+        </ul>
+        <button
+          type="button"
+          disabled={!elegidos.length || guardando}
+          onClick={async () => {
+            setGuardando(true);
+            await onGuardar(elegidos);
+            setGuardando(false);
+          }}
+          className="sticky bottom-0 w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 flex items-center justify-center gap-2 shadow-card"
+        >
+          {guardando && <Loader2 className="h-5 w-5 animate-spin" />}
+          {elegidos.length ? `Agregar ${elegidos.length} producto${elegidos.length === 1 ? "" : "s"}` : "Marca los productos"}
+        </button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1325,7 +1514,10 @@ function FilaCategoria({
   productos,
   primera,
   ultima,
+  arrastrando,
+  onAgarrar,
   onMover,
+  onAgregar,
   onGuardar,
   onBorrar,
 }: {
@@ -1334,7 +1526,10 @@ function FilaCategoria({
   productos: number;
   primera: boolean;
   ultima: boolean;
+  arrastrando: boolean;
+  onAgarrar: (e: React.PointerEvent) => void;
   onMover: (dir: -1 | 1) => void;
+  onAgregar: () => void;
   onGuardar: (c: Partial<Category>) => void;
   onBorrar: () => void;
 }) {
@@ -1343,41 +1538,64 @@ function FilaCategoria({
   useEffect(() => setNombre(categoria.nombre), [categoria.nombre]);
   useEffect(() => setColorLocal(color), [color]);
   return (
-    <li className="bg-card border border-border rounded-2xl shadow-card p-3 flex items-center gap-2">
-      <label className="relative h-10 w-10 shrink-0 rounded-full overflow-hidden border-2 border-border cursor-pointer" title="Cambiar color">
-        <span className="absolute inset-0" style={{ backgroundColor: colorLocal }} />
+    <li
+      className={`bg-card border rounded-2xl shadow-card p-2 pl-1 transition ${
+        arrastrando ? "border-primary ring-2 ring-primary/30 scale-[1.02] shadow-lg relative z-10" : "border-border"
+      }`}
+    >
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onPointerDown={onAgarrar}
+          aria-label={`Arrastrar ${categoria.nombre}`}
+          className={`h-10 w-7 shrink-0 rounded-lg flex items-center justify-center text-muted-foreground touch-none ${arrastrando ? "cursor-grabbing text-primary" : "cursor-grab hover:bg-muted"}`}
+        >
+          <GripVertical className="h-5 w-5" />
+        </button>
+        <label className="relative h-9 w-9 shrink-0 rounded-full overflow-hidden border-2 border-border cursor-pointer" title="Cambiar color">
+          <span className="absolute inset-0" style={{ backgroundColor: colorLocal }} />
+          <input
+            type="color"
+            value={colorLocal}
+            onChange={(e) => setColorLocal(e.target.value)}
+            onBlur={() => colorLocal !== color && onGuardar({ color: colorLocal })}
+            className="absolute inset-0 opacity-0 cursor-pointer"
+            aria-label={`Color de ${categoria.nombre}`}
+          />
+        </label>
         <input
-          type="color"
-          value={colorLocal}
-          onChange={(e) => setColorLocal(e.target.value)}
-          onBlur={() => colorLocal !== color && onGuardar({ color: colorLocal })}
-          className="absolute inset-0 opacity-0 cursor-pointer"
-          aria-label={`Color de ${categoria.nombre}`}
+          className="flex-1 min-w-0 h-10 rounded-lg bg-transparent px-2 font-semibold outline-none focus:bg-muted"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          onBlur={() => nombre.trim() && nombre !== categoria.nombre && onGuardar({ nombre: nombre.trim() })}
+          aria-label="Nombre de la categoría"
         />
-      </label>
-      <input
-        className="flex-1 min-w-0 h-10 rounded-lg bg-transparent px-2 font-semibold outline-none focus:bg-muted"
-        value={nombre}
-        onChange={(e) => setNombre(e.target.value)}
-        onBlur={() => nombre.trim() && nombre !== categoria.nombre && onGuardar({ nombre: nombre.trim() })}
-        aria-label="Nombre de la categoría"
-      />
-      <span className="text-xs text-muted-foreground shrink-0">{productos} prod.</span>
-      <button onClick={() => onMover(-1)} disabled={primera} aria-label="Subir" className="p-2 rounded-lg hover:bg-muted disabled:opacity-25">
-        <ArrowUp className="h-4 w-4" />
-      </button>
-      <button onClick={() => onMover(1)} disabled={ultima} aria-label="Bajar" className="p-2 rounded-lg hover:bg-muted disabled:opacity-25">
-        <ArrowDown className="h-4 w-4" />
-      </button>
-      <button
-        onClick={onBorrar}
-        disabled={productos > 0}
-        title={productos > 0 ? "Mueve o borra primero sus productos" : "Borrar"}
-        aria-label="Borrar categoría"
-        className="p-2 rounded-lg text-destructive hover:bg-destructive/10 disabled:opacity-25"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+        <button onClick={() => onMover(-1)} disabled={primera} aria-label="Subir" className="p-2 rounded-lg hover:bg-muted disabled:opacity-25">
+          <ArrowUp className="h-4 w-4" />
+        </button>
+        <button onClick={() => onMover(1)} disabled={ultima} aria-label="Bajar" className="p-2 rounded-lg hover:bg-muted disabled:opacity-25">
+          <ArrowDown className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="flex items-center gap-2 pl-8 pt-1">
+        <button
+          type="button"
+          onClick={onAgregar}
+          className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-primary inline-flex items-center gap-1.5"
+        >
+          <ListPlus className="h-4 w-4" /> Productos ({productos})
+        </button>
+        <span className="flex-1" />
+        <button
+          onClick={onBorrar}
+          disabled={productos > 0}
+          title={productos > 0 ? "Mueve o borra primero sus productos" : "Borrar"}
+          aria-label="Borrar categoría"
+          className="h-10 w-10 rounded-xl border-2 border-border text-destructive flex items-center justify-center disabled:opacity-25"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </li>
   );
 }

@@ -20,7 +20,7 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 - **Productos:** crear, editar precio, nombre y descripción, ocultar o borrar.
 - **Fotos:** en cada producto, "Subir foto" desde el celular (cámara o galería) o el computador. Se comprime sola (~100-200 KB).
 - **Promos por día:** en un producto, activa "Solo ciertos días" (por ejemplo, el Martes 2x1). Aparece solo esos días.
-- **Categorías:** nombre, orden y color. El texto encima del color se ajusta solo para que se lea.
+- **Categorías:** nombre, orden (arrastrando desde los 6 puntos o con las flechas) y color. Botón **Productos** para pasar varios productos a la categoría de una vez (buscador y filtro). El texto encima del color se ajusta solo para que se lea.
 - **Links:** la página `/links` completa: texto bajo el logo, botón dorado del menú (texto y mostrar/ocultar), botones extra (Maps, TikTok, apps de domicilio…) y los puntos de WhatsApp (número, mensaje inicial, texto del botón).
 - **Ajustes:** título y subtítulo de la portada e Instagram.
 - **Formulario del pedido** (en Ajustes): qué datos llena el cliente, en qué orden, cuáles son obligatorios, listas de opciones (medios de pago, "¿Domicilio o recoger?") y el saludo del mensaje de WhatsApp.
