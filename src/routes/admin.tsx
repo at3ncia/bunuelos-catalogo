@@ -18,6 +18,7 @@ import {
   Bike,
   ClipboardList,
   Megaphone,
+  Bot,
   BarChart3,
   Users,
   GripVertical,
@@ -70,6 +71,7 @@ import {
 import { colorCategoria, FotoProducto } from "@/components/foto-producto";
 import { subirFoto } from "@/lib/fotos";
 import { ListaPedidos } from "@/components/lista-pedidos";
+import { supabase, SUPABASE_URL } from "@/lib/supabase";
 import { Resumen } from "@/components/resumen";
 import { Clientes } from "@/components/clientes";
 import { ESTILOS_LINK, ICONOS_LINK, LinksVista, type PiezaLinks } from "@/components/links-vista";
@@ -2877,6 +2879,8 @@ function PestanaSeguridad({
         </button>
       </Tarjeta>
 
+      <ClaveIA clave={clave} />
+
       <Tarjeta titulo="Tu contraseña de dueño" icono={<KeyRound className="h-4 w-4" />}>
         <ClaveNueva valor={nuevaAdmin} onCambiar={setNuevaAdmin} />
         <button
@@ -2894,6 +2898,92 @@ function PestanaSeguridad({
         </button>
       </Tarjeta>
     </div>
+  );
+}
+
+// Clave que usa la IA de WhatsApp (APEX) para consultar el menú y registrar pedidos.
+// Se genera aquí y se muestra una sola vez; generar otra deja sin acceso a la anterior.
+function ClaveIA({ clave }: { clave: string }) {
+  const [configurada, setConfigurada] = useState<boolean | null>(null);
+  const [nueva, setNueva] = useState("");
+  const [confirmar, setConfirmar] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState("");
+  const [copiado, setCopiado] = useState(false);
+  useEffect(() => {
+    supabase.rpc("admin_estado_clave_ia", { p_clave: clave }).then(({ data, error: e }) => {
+      if (e) setError(/does not exist|could not find/i.test(e.message) ? "Falta ejecutar sql/016_api_ia.sql en Supabase" : e.message);
+      else setConfigurada(!!(data as { configurada?: boolean })?.configurada);
+    });
+  }, [clave]);
+  const generar = async () => {
+    setOcupado(true);
+    const { data, error: e } = await supabase.rpc("admin_generar_clave_ia", { p_clave: clave });
+    setOcupado(false);
+    setConfirmar(false);
+    const r = data as { ok: boolean; clave?: string; error?: string } | null;
+    if (e || !r?.ok) return setError(e?.message ?? r?.error ?? "No se pudo generar");
+    setNueva(r.clave ?? "");
+    setConfigurada(true);
+  };
+  return (
+    <Tarjeta titulo="Clave de la IA de WhatsApp" icono={<Bot className="h-4 w-4" />}>
+      <p className="text-xs text-muted-foreground">
+        La IA (APEX) la usa para ver el menú real de cada punto, el precio del domicilio y registrar pedidos, que salen con 🤖 IA.
+        Se pega una sola vez en APEX. Si la cambias, hay que pegar la nueva en APEX.
+      </p>
+      {error && <p className="rounded-lg bg-destructive/10 text-destructive text-sm px-3 py-2">{error}</p>}
+      {configurada !== null && !nueva && (
+        <p className={`rounded-xl px-3 py-2 text-sm font-semibold ${configurada ? "bg-[#DDF5E4] text-[#14652F]" : "bg-[#FFF1CC] text-[#7A5200]"}`}>
+          {configurada ? "✓ La IA ya tiene clave" : "Aún no hay clave para la IA"}
+        </p>
+      )}
+      {nueva && (
+        <div className="rounded-xl border-2 border-primary bg-primary/5 p-3 space-y-2">
+          <p className="text-sm font-semibold">Cópiala ahora: no se vuelve a mostrar.</p>
+          <code className="block break-all rounded-lg bg-card border border-border p-2 text-xs">{nueva}</code>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(nueva);
+                setCopiado(true);
+              } catch {
+                /* el navegador no dejó copiar: se puede seleccionar a mano */
+              }
+            }}
+            className="h-10 px-3 rounded-xl bg-primary text-primary-foreground font-bold inline-flex items-center gap-1.5"
+          >
+            <Check className={`h-4 w-4 ${copiado ? "" : "hidden"}`} /> {copiado ? "Copiada" : "Copiar clave"}
+          </button>
+          {SUPABASE_URL && (
+            <p className="text-xs text-muted-foreground break-all">
+              Dirección para APEX: {SUPABASE_URL}/rest/v1/rpc/ia_menu (y ia_domicilio, ia_registrar_pedido, ia_comprobante, ia_estado_pedido)
+            </p>
+          )}
+        </div>
+      )}
+      {confirmar ? (
+        <div role="alert" className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 flex flex-wrap items-center gap-2">
+          <span className="flex-1 min-w-[12rem] text-sm font-semibold">La IA dejará de funcionar hasta que pegues la nueva clave en APEX. ¿Seguir?</span>
+          <button type="button" onClick={() => setConfirmar(false)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-muted-foreground">
+            No
+          </button>
+          <button type="button" onClick={generar} disabled={ocupado} className="h-10 px-3 rounded-xl bg-destructive text-white font-bold disabled:opacity-50">
+            Sí, cambiar
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={ocupado || configurada === null}
+          onClick={() => (configurada ? setConfirmar(true) : generar())}
+          className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 inline-flex items-center justify-center gap-2"
+        >
+          {ocupado && <Loader2 className="h-4 w-4 animate-spin" />} {configurada ? "Cambiar la clave de la IA" : "Generar clave de la IA"}
+        </button>
+      )}
+    </Tarjeta>
   );
 }
 

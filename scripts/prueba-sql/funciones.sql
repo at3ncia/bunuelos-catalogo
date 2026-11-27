@@ -70,5 +70,39 @@ begin
   r := admin_borrar_cliente('Admin123', '3001112233');
   assert not exists (select 1 from pedidos where telefono = '3001112233'), 'el cliente no se borró';
   assert exists (select 1 from pedidos where estado = 'confirmado' and total = 10500 and cliente = '{}'), 'la venta debía quedar sin datos personales';
-  raise notice '✓ Funciones 011–015 OK';
+  -- 016: API de la IA
+  insert into puntos_pedido (id, sede_id, nombre, whatsapp) values ('pt1', 1, 'Terminal', '573000000000') on conflict do nothing;
+  insert into productos (id, nombre, precio, categoria_id) values ('p9', 'Avena', 5000, 'b') on conflict do nothing;
+  insert into sede_productos (sede_id, producto_id, disponible) values (1, 'p9', false)
+    on conflict (sede_id, producto_id) do update set disponible = false, actualizado_en = now();
+  insert into barrios (id, sede_id, nombre, precio) select 'car-crespo', 1, 'Crespo', 6000 where not exists (select 1 from barrios where sede_id = 1 and nombre = 'Crespo');
+  update barrios set precio = 6000, activo = true where sede_id = 1 and nombre = 'Crespo';
+  insert into barrios (id, sede_id, nombre, precio) select 'car-manga', 1, 'Manga', null where not exists (select 1 from barrios where sede_id = 1 and nombre = 'Manga');
+  update barrios set precio = null, activo = true where sede_id = 1 and nombre = 'Manga';
+  r := ia_menu('mala', 'pt1');
+  assert not (r->>'ok')::boolean, 'sin clave no debe responder';
+  r := admin_generar_clave_ia('Admin123');
+  cod := r->>'clave';
+  r := ia_menu(cod, 'pt1');
+  assert (r->>'ok')::boolean, 'ia_menu: ' || r::text;
+  assert exists (select 1 from json_array_elements(r->'productos') x where x->>'id' = 'p1'), 'p1 debería estar';
+  assert not exists (select 1 from json_array_elements(r->'productos') x where x->>'id' = 'p9'), 'p9 está agotado en la sede 1';
+  r := ia_domicilio(cod, 'pt1', '  crespó ');
+  assert (r->>'precio')::int = 6000, 'domicilio Crespo: ' || r::text;
+  r := ia_domicilio(cod, 'pt1', 'Manga');
+  assert (r->>'encontrado')::boolean and r->>'precio' is null, 'Manga sin precio: ' || r::text;
+  r := ia_domicilio(cod, 'pt1', 'Barrio Inventado');
+  assert not (r->>'encontrado')::boolean, 'barrio inexistente';
+  r := ia_registrar_pedido(cod, '{"punto_id":"pt1","items":[{"id":"p9","cantidad":1}],"nombre":"Eva","telefono":"3009998877","direccion":"Cra 1","barrio":"Crespo","metodo_pago":"transferencia"}');
+  assert not (r->>'ok')::boolean and r->>'error' like '%Avena%', 'no debe vender agotados: ' || r::text;
+  r := ia_registrar_pedido(cod, '{"punto_id":"pt1","items":[{"id":"p1","cantidad":2}],"nombre":"Eva","telefono":"300 999 8877","direccion":"Cra 1","barrio":"crespo","metodo_pago":"transferencia","conversacion_url":"https://app.apex/c/1"}');
+  assert (r->>'ok')::boolean and (r->>'total')::int = 13000, 'ia_registrar_pedido: ' || r::text;
+  assert (select origen = 'ia' and not comprobante and telefono = '3009998877' and metodo_pago = 'transferencia' and domicilio = 6000
+            from pedidos where codigo = r->>'codigo'), 'pedido IA mal guardado';
+  perform ia_comprobante(cod, lower(r->>'codigo'));
+  assert (select comprobante from pedidos where codigo = r->>'codigo'), 'comprobante no marcado';
+  assert (ia_estado_pedido(cod, r->>'codigo')->>'estado') = 'pendiente', 'estado del pedido';
+  r := ia_registrar_pedido(cod, '{"punto_id":"pt1","items":[{"id":"p1","cantidad":1}],"nombre":"","telefono":"12","direccion":"x","metodo_pago":"efectivo"}');
+  assert not (r->>'ok')::boolean, 'faltan datos debería fallar';
+  raise notice '✓ Funciones 011–016 OK';
 end $$;

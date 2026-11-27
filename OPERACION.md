@@ -32,6 +32,7 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 - **Horario de domicilios:** días y franjas. Fuera de horario, el catálogo avisa solo cuándo abren. Los **festivos de Colombia se calculan automáticamente** (usan el horario del domingo).
 - **Reinicio diario:** por defecto **automático, 1 hora antes de la primera apertura del horario** (si cambias el horario, se ajusta solo); o una hora fija. Se ve cuántos productos están agotados en cada sede y cada una tiene su botón **Reiniciar** (solo esa sede).
 - **Mensaje de WhatsApp:** saludo, línea de cierre, etiquetas en negrita y formato compacto (con vista previa del chat).
+- **Clave de la IA** (en Claves): se genera una vez y se pega en APEX. Ver `APEX.md`.
 - **Claves:** restablecer la clave de una ciudad (cuando cambia el personal) y cambiar la tuya.
 
 ## Automatizaciones que ya funcionan solas
@@ -68,6 +69,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 14. `sql/013_reiniciar_agotados.sql` — botón "Reiniciar" de agotados por sede en Ajustes
 15. `sql/014_pedidos_fechas_sede.sql` — los encargados ven sus pedidos por fechas en `/sede` (solo lectura)
 16. `sql/015_clientes_metricas.sql` — Clientes, Resumen (métricas), autorización de promociones y base para ventas de la IA
+17. `sql/016_api_ia.sql` — API para la IA de WhatsApp (menú por punto, domicilio, registrar pedidos) y su clave en /admin → Claves
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 

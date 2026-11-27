@@ -14,3 +14,6 @@ export const supabase = createClient(
   supabaseUrl || "https://placeholder.supabase.co",
   supabaseAnonKey || "placeholder"
 );
+
+// Dirección del proyecto (para mostrarla en /admin → Claves al configurar la IA)
+export const SUPABASE_URL = supabaseUrl || "";
