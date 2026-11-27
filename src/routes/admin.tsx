@@ -19,6 +19,7 @@ import {
   ClipboardList,
   Megaphone,
   GripVertical,
+  ChevronDown,
   ListPlus,
   Package,
   Pause,
@@ -63,6 +64,7 @@ import {
 import { colorCategoria, FotoProducto } from "@/components/foto-producto";
 import { subirFoto } from "@/lib/fotos";
 import { ListaPedidos } from "@/components/lista-pedidos";
+import { ESTILOS_LINK, ICONOS_LINK, LinksVista, type PiezaLinks } from "@/components/links-vista";
 import {
   borrarBarrio,
   borrarPromo,
@@ -1602,52 +1604,419 @@ function FilaCategoria({
 
 /* ── WhatsApp (puntos de pedido) ───────────────────────────────────────── */
 
+const PUNTO_NUEVO = (sedeId: number, orden: number): PuntoPedido => ({
+  id: `punto-${uid().slice(0, 6)}`,
+  sede_id: sedeId,
+  nombre: "",
+  detalle: "",
+  whatsapp: "57",
+  orden,
+  activo: true,
+  mensaje: "Hola! Quiero ordenar",
+  etiqueta_enlace: "",
+  en_enlaces: true,
+});
+
+const ENLACE_NUEVO = (): Enlace => ({
+  id: uid().slice(0, 6),
+  texto: "",
+  url: "",
+  icono: "ubicacion",
+  estilo: "blanco",
+  activo: true,
+});
+
+// Pestaña Links: editor a la izquierda y vista previa en un celular a la derecha (en PC);
+// en el celular se cambia entre "Editar" y "Vista previa". Tocar algo en la vista previa abre su editor.
 function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
-  const [nuevo, setNuevo] = useState<PuntoPedido | null>(null);
+  const base = datos.ajustes;
+  const [bio, setBio] = useState(base.bio);
+  const [botonMenu, setBotonMenu] = useState(base.boton_menu);
+  const [mostrarMenu, setMostrarMenu] = useState(base.mostrar_boton_menu);
+  const [enlaces, setEnlaces] = useState<Enlace[]>(base.enlaces);
+  const [guardando, setGuardando] = useState(false);
+  const reiniciar = () => {
+    setBio(base.bio);
+    setBotonMenu(base.boton_menu);
+    setMostrarMenu(base.mostrar_boton_menu);
+    setEnlaces(base.enlaces);
+  };
+  useEffect(reiniciar, [base]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [nuevoPunto, setNuevoPunto] = useState<PuntoPedido | null>(null);
+  const [borradores, setBorradores] = useState<Record<string, PuntoPedido>>({});
+  const [seleccion, setSeleccion] = useState<PiezaLinks | null>(null);
+  const [vista, setVista] = useState<"editar" | "ver">("editar");
+  const [porQuitar, setPorQuitar] = useState<string | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  const final: Ajustes = { ...base, bio, boton_menu: botonMenu, mostrar_boton_menu: mostrarMenu, enlaces };
+  const sinCambios = JSON.stringify(final) === JSON.stringify(base);
+  const puntos = [...datos.puntos, ...(nuevoPunto ? [nuevoPunto] : [])].map((p) => borradores[p.id] ?? p);
+  const ciudades = Object.fromEntries(datos.sedes.map((x) => [x.id, x.ciudad]));
+
+  const elegir = (pieza: PiezaLinks | null, desdePreview = false) => {
+    setSeleccion((actual) => (actual === pieza && !desdePreview ? null : pieza));
+    if (!pieza) return;
+    if (desdePreview) {
+      setVista("editar");
+      setTimeout(() => document.getElementById(`editor-${pieza}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    } else {
+      setTimeout(
+        () => previewRef.current?.querySelector(`[data-pieza="${pieza}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+        80,
+      );
+    }
+  };
+  const cambiarEnlace = (i: number, c: Partial<Enlace>) => setEnlaces((l) => l.map((e, k) => (k === i ? { ...e, ...c } : e)));
+  const moverEnlace = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= enlaces.length) return;
+    const l = [...enlaces];
+    [l[i], l[j]] = [l[j], l[i]];
+    setEnlaces(l);
+  };
+  const guardar = async () => {
+    setGuardando(true);
+    await ejecutar(guardarAjustes(clave, final), "Página /links guardada");
+    setGuardando(false);
+  };
+
+  const vistaPrevia = (
+    <div className="mx-auto w-full max-w-[380px]">
+      <div className="rounded-[2.2rem] border-[10px] border-[#0b1530] bg-[#0b1530] shadow-2xl overflow-hidden">
+        <div className="h-5 flex items-center justify-center bg-[#0b1530]">
+          <span className="h-1.5 w-16 rounded-full bg-white/20" />
+        </div>
+        <div ref={previewRef} className="h-[min(70dvh,680px)] lg:h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain rounded-b-[1.4rem]">
+          <LinksVista ajustes={final} puntos={puntos} ciudades={ciudades} preview={{ seleccion, onElegir: (p) => elegir(p, true) }} />
+        </div>
+      </div>
+      <p className="mt-2 text-center text-xs text-muted-foreground">Toca un botón de la vista previa para editarlo.</p>
+    </div>
+  );
+
   return (
-    <div className="space-y-4">
-      <EditorPaginaLinks datos={datos} clave={clave} ejecutar={ejecutar} />
-      <Tarjeta titulo="Puntos de pedido (WhatsApp)" icono={<WhatsAppIcon className="h-4 w-4" />}>
-        <p className="text-sm text-muted-foreground">
-          Cada punto recibe los pedidos de su ciudad por WhatsApp y aparece como botón en <strong>/links</strong>. Si una
-          ciudad tiene varios puntos, el cliente elige el más cercano.
-        </p>
-      </Tarjeta>
-      {[...datos.puntos, ...(nuevo ? [nuevo] : [])].map((p) => (
-        <EditorPunto
-          key={p.id}
-          punto={p}
-          sedes={datos.sedes}
-          esNuevo={p === nuevo}
-          onGuardar={async (cambios) => {
-            const ok = await ejecutar(guardarPunto(clave, cambios), `"${cambios.nombre}" guardado`);
-            if (ok && p === nuevo) setNuevo(null);
-          }}
-          onCancelar={p === nuevo ? () => setNuevo(null) : undefined}
-        />
-      ))}
-      {!nuevo && (
-        <button
-          onClick={() =>
-            setNuevo({
-              id: `punto-${uid().slice(0, 6)}`,
-              sede_id: datos.sedes[0]?.id ?? 1,
-              nombre: "",
-              detalle: "",
-              whatsapp: "57",
-              orden: datos.puntos.length,
-              activo: true,
-              mensaje: "Hola! Quiero ordenar",
-              etiqueta_enlace: "",
-              en_enlaces: true,
-            })
-          }
-          className="w-full h-12 rounded-xl border-2 border-dashed border-border text-muted-foreground font-semibold inline-flex items-center justify-center gap-2 hover:border-primary hover:text-primary"
-        >
-          <Plus className="h-5 w-5" /> Agregar punto de pedido
-        </button>
+    <div className="lg:w-[min(72rem,calc(100vw-3rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2 space-y-4">
+      <div className="lg:hidden sticky top-2 z-30 grid grid-cols-2 gap-1 bg-card border border-border rounded-xl p-1 shadow-card">
+        {(
+          [
+            ["editar", "Editar", Pencil],
+            ["ver", "Vista previa", Eye],
+          ] as const
+        ).map(([id, texto, Icono]) => (
+          <button
+            key={id}
+            onClick={() => setVista(id)}
+            aria-pressed={vista === id}
+            className={`h-10 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${vista === id ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          >
+            <Icono className="h-4 w-4" /> {texto}
+          </button>
+        ))}
+      </div>
+
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start">
+        <div className={`space-y-4 min-w-0 ${vista === "ver" ? "hidden lg:block" : ""}`}>
+          <div className="flex items-center gap-3 bg-card border border-border rounded-2xl shadow-card p-3">
+            <span className="h-10 w-10 shrink-0 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <ExternalLink className="h-5 w-5" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block font-display font-bold text-primary">Tu página de enlaces</span>
+              <span className="block text-xs text-muted-foreground truncate">Para la bio de Instagram y los códigos QR</span>
+            </span>
+            <a href="/links" target="_blank" rel="noopener noreferrer" className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-primary inline-flex items-center gap-1.5 shrink-0">
+              Abrir
+            </a>
+          </div>
+
+          <SeccionLinks numero={1} titulo="Encabezado" detalle="Texto bajo el logo" activa={seleccion === "bio"} id="editor-bio" onTocar={() => elegir("bio")}>
+            <textarea
+              className={`${INPUT} h-auto py-2`}
+              rows={2}
+              maxLength={160}
+              value={bio}
+              onFocus={() => elegir("bio")}
+              onChange={(e) => setBio(e.target.value)}
+              placeholder="+ de 10 años en el mercado 🧡"
+            />
+            <p className="text-xs text-muted-foreground text-right">{bio.length}/160</p>
+          </SeccionLinks>
+
+          <SeccionLinks numero={2} titulo="Botón del menú" detalle="El dorado, lleva al catálogo" activa={seleccion === "menu"} id="editor-menu" onTocar={() => elegir("menu")}>
+            <Interruptor activo={mostrarMenu} onCambiar={setMostrarMenu} titulo="Mostrar botón del menú" detalle="Pide la ciudad y abre el catálogo. Tiene un destello cada 4 segundos." />
+            {mostrarMenu && (
+              <Campo etiqueta="Texto del botón">
+                <input className={INPUT} value={botonMenu} onFocus={() => elegir("menu")} onChange={(e) => setBotonMenu(e.target.value)} maxLength={40} />
+              </Campo>
+            )}
+          </SeccionLinks>
+
+          <SeccionLinks numero={3} titulo="Puntos de WhatsApp" detalle="Reciben los pedidos · cada uno se guarda aparte">
+            <ul className="space-y-2">
+              {puntos.map((p) => {
+                const pieza: PiezaLinks = `punto:${p.id}`;
+                const abierto = seleccion === pieza;
+                const esNuevo = p.id === nuevoPunto?.id;
+                const original = datos.puntos.find((x) => x.id === p.id);
+                return (
+                  <li key={p.id} id={`editor-${pieza}`} className={`rounded-2xl border-2 transition ${abierto ? "border-primary" : "border-border"} ${p.en_enlaces === false || p.activo === false ? "bg-muted/40" : ""}`}>
+                    <div className="flex items-center gap-2 p-2">
+                      <button type="button" onClick={() => elegir(pieza)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
+                        <span className="h-10 w-10 shrink-0 rounded-xl bg-[#25D366] text-white flex items-center justify-center">
+                          <WhatsAppIcon className="h-6 w-6" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-semibold truncate">{p.etiqueta_enlace || p.nombre || "Nuevo punto"}</span>
+                          <span className="block text-xs text-muted-foreground truncate">
+                            {ciudades[p.sede_id] ?? ""} · +{p.whatsapp}
+                          </span>
+                        </span>
+                      </button>
+                      {original && !abierto && (
+                        <InterruptorCompacto
+                          activo={original.en_enlaces !== false}
+                          encendido="Visible"
+                          apagado="Oculto"
+                          corto
+                          onCambiar={(v) => ejecutar(guardarPunto(clave, { ...original, en_enlaces: v }), v ? "Punto visible en /links" : "Punto oculto en /links")}
+                        />
+                      )}
+                      <ChevronDown className={`h-5 w-5 text-muted-foreground shrink-0 transition ${abierto ? "rotate-180" : ""}`} />
+                    </div>
+                    {abierto && (
+                      <div className="border-t border-border p-3">
+                        <EditorPunto
+                          embebido
+                          punto={original ?? p}
+                          sedes={datos.sedes}
+                          esNuevo={esNuevo}
+                          onCambio={(d) => setBorradores((b) => ({ ...b, [d.id]: d }))}
+                          onGuardar={async (cambios) => {
+                            const ok = await ejecutar(guardarPunto(clave, cambios), `"${cambios.nombre}" guardado`);
+                            if (ok) {
+                              setBorradores((b) => {
+                                const { [cambios.id]: _, ...resto } = b;
+                                return resto;
+                              });
+                              if (esNuevo) setNuevoPunto(null);
+                            }
+                          }}
+                          onCancelar={
+                            esNuevo
+                              ? () => {
+                                  setNuevoPunto(null);
+                                  setSeleccion(null);
+                                }
+                              : undefined
+                          }
+                        />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {!nuevoPunto && (
+              <button
+                type="button"
+                onClick={() => {
+                  const n = PUNTO_NUEVO(datos.sedes[0]?.id ?? 1, datos.puntos.length);
+                  setNuevoPunto(n);
+                  elegir(`punto:${n.id}`);
+                }}
+                className="w-full h-11 rounded-xl border-2 border-dashed border-border text-muted-foreground font-semibold inline-flex items-center justify-center gap-2 hover:border-primary hover:text-primary"
+              >
+                <Plus className="h-5 w-5" /> Agregar punto de WhatsApp
+              </button>
+            )}
+          </SeccionLinks>
+
+          <SeccionLinks numero={4} titulo="Botones extra" detalle="Maps, TikTok, apps de domicilio, una promo…">
+            <ul className="space-y-2">
+              {enlaces.map((e, i) => {
+                const pieza: PiezaLinks = `enlace:${e.id}`;
+                const abierto = seleccion === pieza;
+                const Icono = ICONOS_LINK[e.icono];
+                const est = ESTILOS_LINK[e.estilo];
+                return (
+                  <li key={e.id} id={`editor-${pieza}`} className={`rounded-2xl border-2 transition ${abierto ? "border-primary" : "border-border"} ${e.activo ? "" : "bg-muted/40"}`}>
+                    <div className="flex items-center gap-2 p-2">
+                      <button type="button" onClick={() => elegir(pieza)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
+                        <span className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center shadow-soft ${est.boton} ${e.activo ? "" : "grayscale opacity-60"}`}>
+                          <Icono className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block font-semibold truncate">{e.texto || "Botón sin texto"}</span>
+                          <span className={`block text-xs truncate ${urlEnlace(e) ? "text-muted-foreground" : "text-destructive"}`}>
+                            {urlEnlace(e) || "Falta el enlace: no se muestra"}
+                          </span>
+                        </span>
+                      </button>
+                      {!abierto && (
+                        <InterruptorCompacto corto activo={e.activo} encendido="Visible" apagado="Oculto" onCambiar={(v) => cambiarEnlace(i, { activo: v })} />
+                      )}
+                      <ChevronDown className={`h-5 w-5 text-muted-foreground shrink-0 transition ${abierto ? "rotate-180" : ""}`} />
+                    </div>
+                    {abierto && (
+                      <div className="border-t border-border p-3 space-y-3">
+                        <Campo etiqueta="Texto del botón">
+                          <input className={INPUT} value={e.texto} onChange={(ev) => cambiarEnlace(i, { texto: ev.target.value })} placeholder="Cómo llegar" maxLength={40} />
+                        </Campo>
+                        <Campo
+                          etiqueta={e.icono === "telefono" ? "Número para llamar" : e.icono === "whatsapp" ? "Número de WhatsApp" : "Enlace"}
+                          ayuda={urlEnlace(e) ? `Abre: ${urlEnlace(e)}` : "Pega el enlace o escribe el número"}
+                        >
+                          <input
+                            className={INPUT}
+                            value={e.url}
+                            inputMode={e.icono === "telefono" || e.icono === "whatsapp" ? "tel" : "url"}
+                            onChange={(ev) => cambiarEnlace(i, { url: ev.target.value })}
+                            placeholder={e.icono === "telefono" || e.icono === "whatsapp" ? "3001234567" : "maps.app.goo.gl/…"}
+                          />
+                        </Campo>
+                        <div className="space-y-1.5">
+                          <span className="text-sm font-semibold">Ícono</span>
+                          <div className="grid grid-cols-4 gap-2">
+                            {ICONOS_ENLACE.map((ic) => {
+                              const I = ICONOS_LINK[ic.id];
+                              const activo = e.icono === ic.id;
+                              return (
+                                <button
+                                  key={ic.id}
+                                  type="button"
+                                  aria-pressed={activo}
+                                  onClick={() => cambiarEnlace(i, { icono: ic.id })}
+                                  className={`rounded-xl border-2 py-2 flex flex-col items-center gap-1 text-[11px] font-semibold leading-tight ${activo ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground"}`}
+                                >
+                                  <I className="h-5 w-5" />
+                                  <span className="text-center px-0.5">{ic.nombre.split(" / ")[0]}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="text-sm font-semibold">Color</span>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(Object.keys(ESTILOS_LINK) as Enlace["estilo"][]).map((k) => (
+                              <button
+                                key={k}
+                                type="button"
+                                aria-pressed={e.estilo === k}
+                                onClick={() => cambiarEnlace(i, { estilo: k })}
+                                className={`h-11 rounded-xl text-sm font-semibold border-2 shadow-soft ${ESTILOS_LINK[k].boton} ${e.estilo === k ? "ring-2 ring-primary ring-offset-2 border-transparent" : "border-border"}`}
+                              >
+                                {ESTILOS_LINK[k].nombre}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <Interruptor activo={e.activo} onCambiar={(v) => cambiarEnlace(i, { activo: v })} titulo="Visible en la página" />
+                        {porQuitar === e.id ? (
+                          <div role="alert" className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 flex items-center gap-2">
+                            <span className="flex-1 text-sm font-semibold text-destructive">¿Quitar este botón?</span>
+                            <button type="button" onClick={() => setPorQuitar(null)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-muted-foreground">
+                              No
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEnlaces((l) => l.filter((x) => x.id !== e.id));
+                                setPorQuitar(null);
+                                setSeleccion(null);
+                              }}
+                              className="h-10 px-3 rounded-xl bg-destructive text-white font-bold"
+                            >
+                              Sí, quitar
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <button type="button" onClick={() => moverEnlace(i, -1)} disabled={i === 0} aria-label="Subir" className="h-10 w-10 rounded-xl border-2 border-border flex items-center justify-center disabled:opacity-25">
+                              <ArrowUp className="h-4 w-4" />
+                            </button>
+                            <button type="button" onClick={() => moverEnlace(i, 1)} disabled={i === enlaces.length - 1} aria-label="Bajar" className="h-10 w-10 rounded-xl border-2 border-border flex items-center justify-center disabled:opacity-25">
+                              <ArrowDown className="h-4 w-4" />
+                            </button>
+                            <span className="flex-1" />
+                            <button type="button" onClick={() => setPorQuitar(e.id)} className="h-10 px-3 rounded-xl border-2 border-border text-destructive font-semibold inline-flex items-center gap-1.5">
+                              <Trash2 className="h-4 w-4" /> Quitar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <button
+              type="button"
+              onClick={() => {
+                const n = ENLACE_NUEVO();
+                setEnlaces((l) => [...l, n]);
+                elegir(`enlace:${n.id}`);
+              }}
+              className="w-full h-11 rounded-xl border-2 border-dashed border-border text-muted-foreground font-semibold inline-flex items-center justify-center gap-2 hover:border-primary hover:text-primary"
+            >
+              <Plus className="h-5 w-5" /> Agregar botón
+            </button>
+          </SeccionLinks>
+        </div>
+
+        <div className={`lg:sticky lg:top-4 ${vista === "editar" ? "hidden lg:block" : ""}`}>{vistaPrevia}</div>
+      </div>
+
+      {!sinCambios && (
+        <div className="sticky bottom-3 z-30 flex items-center gap-2 rounded-2xl bg-[#0b1530] text-white p-2 pl-4 shadow-2xl">
+          <span className="flex-1 text-sm font-semibold">Cambios sin guardar</span>
+          <button type="button" onClick={reiniciar} className="h-11 px-3 rounded-xl text-sm font-semibold text-white/80 hover:bg-white/10">
+            Descartar
+          </button>
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando}
+            className="h-11 px-4 rounded-xl bg-[#D9731B] text-white font-bold inline-flex items-center gap-2 disabled:opacity-50"
+          >
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />} Guardar
+          </button>
+        </div>
       )}
     </div>
+  );
+}
+
+function SeccionLinks({
+  numero,
+  titulo,
+  detalle,
+  activa = false,
+  id,
+  onTocar,
+  children,
+}: {
+  numero: number;
+  titulo: string;
+  detalle: string;
+  activa?: boolean;
+  id?: string;
+  onTocar?: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section id={id} className={`bg-card border-2 rounded-2xl shadow-card p-4 space-y-3 transition ${activa ? "border-primary" : "border-border"}`}>
+      <button type="button" onClick={onTocar} className="w-full flex items-center gap-3 text-left" tabIndex={onTocar ? 0 : -1}>
+        <span className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground font-display font-bold flex items-center justify-center">{numero}</span>
+        <span className="min-w-0">
+          <span className="block font-display font-bold text-primary leading-tight">{titulo}</span>
+          <span className="block text-xs text-muted-foreground">{detalle}</span>
+        </span>
+      </button>
+      {children}
+    </section>
   );
 }
 
@@ -1655,19 +2024,27 @@ function EditorPunto({
   punto,
   sedes,
   esNuevo,
+  embebido = false,
+  onCambio,
   onGuardar,
   onCancelar,
 }: {
   punto: PuntoPedido;
   sedes: Sede[];
   esNuevo: boolean;
+  embebido?: boolean;
+  onCambio?: (p: PuntoPedido) => void;
   onGuardar: (p: PuntoPedido) => Promise<void>;
   onCancelar?: () => void;
 }) {
   const [p, setP] = useState(punto);
   const [guardando, setGuardando] = useState(false);
   useEffect(() => setP(punto), [punto]);
-  const cambiar = (c: Partial<PuntoPedido>) => setP({ ...p, ...c });
+  const cambiar = (c: Partial<PuntoPedido>) => {
+    const n = { ...p, ...c };
+    setP(n);
+    onCambio?.(n);
+  };
   const sinCambios = JSON.stringify(p) === JSON.stringify(punto) && !esNuevo;
 
   return (
@@ -1678,13 +2055,15 @@ function EditorPunto({
         await onGuardar(p);
         setGuardando(false);
       }}
-      className="bg-card border border-border rounded-2xl shadow-card p-4 space-y-3"
+      className={embebido ? "space-y-3" : "bg-card border border-border rounded-2xl shadow-card p-4 space-y-3"}
     >
-      <div className="flex items-center gap-2">
-        <WhatsAppIcon className="h-5 w-5 text-[#1FA855]" />
-        <h3 className="font-display font-bold text-primary flex-1">{p.nombre || "Nuevo punto"}</h3>
-        {p.activo === false && <Etiqueta tono="gris">Inactivo</Etiqueta>}
-      </div>
+      {!embebido && (
+        <div className="flex items-center gap-2">
+          <WhatsAppIcon className="h-5 w-5 text-[#1FA855]" />
+          <h3 className="font-display font-bold text-primary flex-1">{p.nombre || "Nuevo punto"}</h3>
+          {p.activo === false && <Etiqueta tono="gris">Inactivo</Etiqueta>}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Campo etiqueta="Nombre">
           <input className={INPUT} value={p.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} required placeholder="Bocagrande" />
@@ -1737,174 +2116,9 @@ function EditorPunto({
           disabled={guardando || sinCambios}
           className="flex-1 h-11 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 flex items-center justify-center gap-2"
         >
-          {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {sinCambios ? "Sin cambios" : "Guardar"}
+          {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {sinCambios ? "Sin cambios" : "Guardar punto"}
         </button>
       </div>
-    </form>
-  );
-}
-
-/* ── Página /links ─────────────────────────────────────────────────────── */
-
-const ENLACE_NUEVO = (): Enlace => ({
-  id: uid().slice(0, 6),
-  texto: "",
-  url: "",
-  icono: "ubicacion",
-  estilo: "blanco",
-  activo: true,
-});
-
-function EditorPaginaLinks({ datos, clave, ejecutar }: PropsPestana) {
-  const base = datos.ajustes;
-  const [bio, setBio] = useState(base.bio);
-  const [botonMenu, setBotonMenu] = useState(base.boton_menu);
-  const [mostrarMenu, setMostrarMenu] = useState(base.mostrar_boton_menu);
-  const [enlaces, setEnlaces] = useState<Enlace[]>(base.enlaces);
-  const [guardando, setGuardando] = useState(false);
-  useEffect(() => {
-    setBio(base.bio);
-    setBotonMenu(base.boton_menu);
-    setMostrarMenu(base.mostrar_boton_menu);
-    setEnlaces(base.enlaces);
-  }, [base]);
-
-  const final: Ajustes = { ...base, bio, boton_menu: botonMenu, mostrar_boton_menu: mostrarMenu, enlaces };
-  const sinCambios = JSON.stringify(final) === JSON.stringify(base);
-  const cambiarEnlace = (i: number, c: Partial<Enlace> | null) => {
-    const lista = [...enlaces];
-    if (c) lista[i] = { ...lista[i], ...c };
-    else lista.splice(i, 1);
-    setEnlaces(lista);
-  };
-  const mover = (i: number, dir: -1 | 1) => {
-    const j = i + dir;
-    if (j < 0 || j >= enlaces.length) return;
-    const lista = [...enlaces];
-    [lista[i], lista[j]] = [lista[j], lista[i]];
-    setEnlaces(lista);
-  };
-
-  return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setGuardando(true);
-        await ejecutar(guardarAjustes(clave, final), "Página /links guardada");
-        setGuardando(false);
-      }}
-      className="bg-card border border-border rounded-2xl shadow-card p-4 space-y-4"
-    >
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display font-bold text-primary">Página /links</h2>
-        <a
-          href="/links"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-semibold text-primary"
-        >
-          Ver <ExternalLink className="h-4 w-4" />
-        </a>
-      </div>
-
-      <Campo etiqueta="Texto bajo el logo" ayuda="Opcional. Por ejemplo: + de 10 años en el mercado 🧡">
-        <textarea className={`${INPUT} h-auto py-2`} rows={2} maxLength={160} value={bio} onChange={(e) => setBio(e.target.value)} />
-      </Campo>
-
-      <Interruptor
-        activo={mostrarMenu}
-        onCambiar={setMostrarMenu}
-        titulo="Botón dorado del menú"
-        detalle="Lleva al catálogo y pide la ciudad. Tiene el destello cada 4 segundos."
-      />
-      {mostrarMenu && (
-        <Campo etiqueta="Texto del botón dorado">
-          <input className={INPUT} value={botonMenu} onChange={(e) => setBotonMenu(e.target.value)} maxLength={40} />
-        </Campo>
-      )}
-
-      <div className="space-y-2">
-        <p className="text-sm font-semibold">Botones extra</p>
-        <p className="text-xs text-muted-foreground">
-          Aparecen después de los botones de WhatsApp: ubicación en Maps, TikTok, Rappi, una promo…
-        </p>
-        {enlaces.map((e, i) => (
-          <div key={e.id} className={`rounded-xl border border-border p-3 space-y-2 ${e.activo ? "" : "opacity-60"}`}>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                className={`${INPUT} h-10`}
-                value={e.texto}
-                onChange={(ev) => cambiarEnlace(i, { texto: ev.target.value })}
-                placeholder="Texto del botón"
-                aria-label="Texto del botón"
-              />
-              <select
-                className={`${INPUT} h-10`}
-                value={e.icono}
-                onChange={(ev) => cambiarEnlace(i, { icono: ev.target.value as Enlace["icono"] })}
-                aria-label="Ícono"
-              >
-                {ICONOS_ENLACE.map((ic) => (
-                  <option key={ic.id} value={ic.id}>
-                    {ic.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <input
-              className={`${INPUT} h-10`}
-              value={e.url}
-              onChange={(ev) => cambiarEnlace(i, { url: ev.target.value })}
-              placeholder={e.icono === "telefono" || e.icono === "whatsapp" ? "3001234567" : "maps.app.goo.gl/…"}
-              aria-label="Enlace"
-            />
-            {e.url && <p className="text-xs text-muted-foreground truncate">Abre: {urlEnlace(e)}</p>}
-            <div className="flex items-center gap-1">
-              {(["blanco", "naranja", "dorado"] as const).map((est) => (
-                <button
-                  key={est}
-                  type="button"
-                  onClick={() => cambiarEnlace(i, { estilo: est })}
-                  aria-pressed={e.estilo === est}
-                  className={`h-8 px-3 rounded-full text-xs font-semibold border-2 ${
-                    e.estilo === est ? "border-primary" : "border-transparent"
-                  } ${est === "blanco" ? "bg-white text-[#122a6b] shadow-soft" : est === "naranja" ? "bg-[#D9731B] text-white" : "btn-dorado"}`}
-                >
-                  {est[0].toUpperCase() + est.slice(1)}
-                </button>
-              ))}
-              <span className="flex-1" />
-              <button type="button" onClick={() => cambiarEnlace(i, { activo: !e.activo })} className="h-8 px-2 rounded-lg text-xs font-semibold hover:bg-muted">
-                {e.activo ? "Ocultar" : "Mostrar"}
-              </button>
-              <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} aria-label="Subir" className="p-1.5 disabled:opacity-25">
-                <ArrowUp className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => mover(i, 1)} disabled={i === enlaces.length - 1} aria-label="Bajar" className="p-1.5 disabled:opacity-25">
-                <ArrowDown className="h-4 w-4" />
-              </button>
-              <button type="button" onClick={() => cambiarEnlace(i, null)} aria-label="Quitar" className="p-1.5 text-destructive">
-                <Trash2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => setEnlaces([...enlaces, ENLACE_NUEVO()])}
-          className="w-full h-10 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground font-semibold hover:border-primary hover:text-primary"
-        >
-          + Agregar botón
-        </button>
-      </div>
-
-      <button
-        type="submit"
-        disabled={guardando || sinCambios}
-        className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 flex items-center justify-center gap-2"
-      >
-        {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {sinCambios ? "Sin cambios" : "Guardar página /links"}
-      </button>
     </form>
   );
 }
@@ -2318,12 +2532,14 @@ function InterruptorCompacto({
   encendido,
   apagado,
   ocupado = false,
+  corto = false,
 }: {
   activo: boolean;
   onCambiar: (v: boolean) => void;
   encendido: string;
   apagado: string;
   ocupado?: boolean;
+  corto?: boolean; // en pantallas angostas muestra solo el interruptor
 }) {
   return (
     <button
@@ -2337,7 +2553,7 @@ function InterruptorCompacto({
       <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${activo ? "bg-[#1F9D4C]" : "bg-muted-foreground/30"}`}>
         <span className={`block h-5 w-5 rounded-full bg-white shadow transition ${activo ? "translate-x-5" : ""}`} />
       </span>
-      <span className={`text-sm font-semibold ${activo ? "text-[#14652F]" : "text-muted-foreground"}`}>
+      <span className={`text-sm font-semibold ${corto ? "sr-only min-[440px]:not-sr-only" : ""} ${activo ? "text-[#14652F]" : "text-muted-foreground"}`}>
         {activo ? encendido : apagado}
       </span>
     </button>
@@ -2498,7 +2714,7 @@ function Interruptor({
         <span className="block font-semibold text-sm">{titulo}</span>
         {detalle && <span className="block text-xs text-muted-foreground">{detalle}</span>}
       </span>
-      <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${activo ? "bg-primary" : "bg-muted-foreground/30"}`}>
+      <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${activo ? "bg-[#1F9D4C]" : "bg-muted-foreground/30"}`}>
         <span className={`block h-5 w-5 rounded-full bg-white shadow transition ${activo ? "translate-x-5" : ""}`} />
       </span>
     </button>
