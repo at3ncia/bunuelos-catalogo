@@ -1,0 +1,28 @@
+# Al fusionar a main: aplica en Supabase los scripts nuevos de sql/, en orden y una sola vez
+# (lleva registro en la tabla migraciones_aplicadas). Si un script falla, no se aplica a medias
+# y el error queda en la pestaña Actions de GitHub.
+name: Base de datos
+
+on:
+  push:
+    branches: [main]
+    paths: ["sql/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: base-de-datos
+  cancel-in-progress: false
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    environment: produccion
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar cliente de Postgres
+        run: sudo apt-get install -y -qq postgresql-client >/dev/null
+      - name: Aplicar scripts pendientes
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: scripts/aplicar-sql.sh

@@ -25,7 +25,7 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 - **Ajustes:** título y subtítulo de la portada e Instagram.
 - **Ajustes** (con vista previa en vivo de la portada, el formulario y el mensaje que llega por WhatsApp): portada, **formulario del pedido** (qué datos llena el cliente, en qué orden, obligatorios, tipo de respuesta y opciones como fichas: tocar una la deja marcada por defecto, con sugerencias de medios de pago), saludo del mensaje, horario y hora de reinicio.
 - **Horario de domicilios:** días y franjas. Fuera de horario, el catálogo avisa solo cuándo abren. Los **festivos de Colombia se calculan automáticamente** (usan el horario del domingo).
-- **Reinicio diario:** por defecto **automático, 1 hora antes de la primera apertura del horario** (si cambias el horario, se ajusta solo); o una hora fija. Se ve cuántos productos están agotados por sede y hay un botón **Reiniciar ahora**.
+- **Reinicio diario:** por defecto **automático, 1 hora antes de la primera apertura del horario** (si cambias el horario, se ajusta solo); o una hora fija. Se ve cuántos productos están agotados en cada sede y cada una tiene su botón **Reiniciar** (solo esa sede).
 - **Mensaje de WhatsApp:** saludo, línea de cierre, etiquetas en negrita y formato compacto (con vista previa del chat).
 - **Claves:** restablecer la clave de una ciudad (cuando cambia el personal) y cambiar la tuya.
 
@@ -60,7 +60,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 11. `sql/010_ocultar_precio_domicilio.sql` — el público ya no puede leer el precio del domicilio
 12. `sql/011_pedidos_borrar_y_fechas.sql` — borrar pedidos, limpieza de pendientes de más de 30 días y filtro por fechas
 13. `sql/012_promos_frecuencia.sql` — promos: frecuencia (cada visita / una vez al día / una sola vez) y franja de horas
-14. `sql/013_reiniciar_agotados.sql` — botón "Reiniciar ahora" de agotados en Ajustes
+14. `sql/013_reiniciar_agotados.sql` — botón "Reiniciar" de agotados por sede en Ajustes
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 
@@ -79,10 +79,20 @@ La tabla `pedidos` ya tiene `pago_proveedor` y `pago_referencia`. Para que un pa
 
 ## Pendientes
 
-- [ ] **Ejecutar `sql/013_reiniciar_agotados.sql`** en Supabase (sin esto, el botón "Reiniciar ahora" muestra un aviso).
-
-- [ ] **Ejecutar `sql/012_promos_frecuencia.sql`** en Supabase (sin esto, la frecuencia y el horario de las promos no se guardan).
-
-- [ ] **Ejecutar `sql/011_pedidos_borrar_y_fechas.sql`** en Supabase (sin esto, borrar y Fechas muestran un aviso).
-
+- [ ] **Una sola vez: guardar el secreto `SUPABASE_DB_URL` en GitHub** (ver "Cómo se publica"). Con eso, `sql/011`, `012` y `013` se aplican solos al fusionar a `main`. Mientras no esté, hay que pegarlos a mano en Supabase → SQL Editor, en orden.
 - [ ] **Correo de la política de datos:** definir el correo de atención al cliente (quejas y solicitudes de datos personales) y reemplazar `[CORREO DE ATENCIÓN AL CLIENTE]` en `src/routes/politica-de-privacidad-y-uso-de-datos.tsx` (aparece 3 veces).
+
+## Cómo se publica (automático)
+
+1. Cada cambio se propone en un **pull request** en GitHub. Ahí, solo, aparece un comentario con
+   **capturas** del catálogo, /links y el panel en celular (360 y 390) y PC, y la lista de scripts
+   de base de datos que se aplicarán. Los scripts de `sql/` también se prueban en una base desechable.
+   Nada de esto gasta créditos de Netlify (Netlify solo compila `main`).
+2. Al **fusionar a `main`**: Netlify publica la web y GitHub aplica en Supabase los scripts nuevos de
+   `sql/` (una sola vez cada uno; queda registro en la tabla `migraciones_aplicadas`). Si uno falla,
+   no se aplica a medias y el error queda en GitHub → Actions → "Base de datos".
+
+**Configuración, una sola vez:** en Supabase → Project Settings → Database → *Connection string*
+(URI, "Session pooler") copia la dirección con tu contraseña de la base de datos. En GitHub →
+Settings → Secrets and variables → Actions → *New repository secret*: nombre `SUPABASE_DB_URL`,
+valor esa dirección. Nunca la pegues en un chat ni en el código.

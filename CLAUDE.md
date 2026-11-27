@@ -33,5 +33,8 @@ Antes de dar algo por terminado, revisar:
   de Postgres que verifican contraseña (ver `sql/`). Nunca agregar políticas de
   escritura abiertas.
 - Cambios de base de datos: nuevo archivo `sql/NNN_nombre.sql`, que se pueda ejecutar
-  más de una vez, y anotarlo en `OPERACION.md`.
+  más de una vez (sin `begin`/`commit` propios), y anotarlo en `OPERACION.md`. Se aplica solo al
+  fusionar a `main` (`.github/workflows/base-de-datos.yml`). Probarlo antes con
+  `scripts/prueba-sql/probar.sh` y agregar sus casos a `scripts/prueba-sql/funciones.sql`.
+- Revisión visual: `scripts/capturas.cjs` (datos de prueba, sin Supabase); corre solo en cada PR.
 - Guía del día a día para el negocio: `OPERACION.md`.

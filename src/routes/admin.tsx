@@ -2247,22 +2247,21 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
   const sinCambios = JSON.stringify(final) === JSON.stringify(base);
   const horaPendiente = datos.ajustes.hora_reinicio !== horaReinicio(datos.ajustes); // falta guardar una vez
   const [agotados, setAgotados] = useState<Record<number, number> | null>(null);
-  const [confirmarReinicio, setConfirmarReinicio] = useState(false);
+  const [confirmarReinicio, setConfirmarReinicio] = useState<number | null>(null); // sede a reiniciar
   const [reiniciando, setReiniciando] = useState(false);
   useEffect(() => {
     contarAgotados().then(setAgotados);
   }, []);
-  const totalAgotados = agotados ? Object.values(agotados).reduce((x, y) => x + y, 0) : 0;
-  const reiniciar = async () => {
+  const reiniciar = async (sedeId: number) => {
     setReiniciando(true);
-    const r = await reiniciarAgotados(clave);
+    const r = await reiniciarAgotados(clave, sedeId);
     const ok = await ejecutar(
       Promise.resolve(r.ok ? r : { ok: false, error: /does not exist|could not find/i.test(r.error ?? "") ? "Falta ejecutar sql/013_reiniciar_agotados.sql en Supabase" : r.error }),
-      "Todo volvió a estar disponible",
+      `Todo disponible de nuevo en ${datos.sedes.find((x) => x.id === sedeId)?.ciudad ?? "la sede"}`,
     );
     setReiniciando(false);
-    setConfirmarReinicio(false);
-    if (ok) setAgotados({});
+    setConfirmarReinicio(null);
+    if (ok) setAgotados((c) => ({ ...(c ?? {}), [sedeId]: 0 }));
   };
   const errorFormulario = a.campos_pedido.find(
     (c) => c.activo && (!c.etiqueta.trim() || (c.tipo === "opciones" && !(c.opciones ?? []).length)),
@@ -2427,45 +2426,47 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
           </SeccionLinks>
 
           <SeccionLinks numero={5} titulo="Agotados" detalle={`Lo marcado como "Se acabó hoy" vuelve solo a las ${NOMBRE_HORA(horaReinicio(a))}`}>
-            <div className={`rounded-2xl p-3 flex items-center gap-3 ${totalAgotados ? "bg-[#FFF1CC]" : "bg-[#DDF5E4]"}`}>
-              <span className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center font-display font-bold text-lg ${totalAgotados ? "bg-[#D9731B] text-white" : "bg-[#1F9D4C] text-white"}`}>
-                {agotados === null ? "–" : totalAgotados}
-              </span>
-              <span className="flex-1 min-w-0 text-sm">
-                <span className={`block font-semibold ${totalAgotados ? "text-[#7A5200]" : "text-[#14652F]"}`}>
-                  {agotados === null
-                    ? "No se pudo consultar ahora"
-                    : totalAgotados
-                      ? `${totalAgotados} producto${totalAgotados === 1 ? "" : "s"} agotado${totalAgotados === 1 ? "" : "s"} hoy`
-                      : "Todo está disponible"}
-                </span>
-                {!!totalAgotados && (
-                  <span className="block text-xs text-muted-foreground">
-                    {datos.sedes
-                      .filter((x) => agotados?.[x.id])
-                      .map((x) => `${x.ciudad}: ${agotados?.[x.id]}`)
-                      .join(" · ")}{" "}
-                    · vuelven a las {NOMBRE_HORA(datos.ajustes.hora_reinicio)}
-                  </span>
-                )}
-              </span>
-              {!!totalAgotados && !confirmarReinicio && (
-                <button type="button" onClick={() => setConfirmarReinicio(true)} className="h-10 px-3 shrink-0 rounded-xl bg-card border-2 border-border text-sm font-semibold text-primary">
-                  Reiniciar ahora
-                </button>
-              )}
+            <div className="space-y-2">
+              {datos.sedes.map((sede) => {
+                const n = agotados?.[sede.id] ?? 0;
+                const confirmando = confirmarReinicio === sede.id;
+                return (
+                  <div key={sede.id} className={`rounded-2xl p-3 ${n ? "bg-[#FFF1CC]" : "bg-[#DDF5E4]"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center font-display font-bold text-lg text-white ${n ? "bg-[#D9731B]" : "bg-[#1F9D4C]"}`}>
+                        {agotados === null ? "–" : n}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block font-semibold truncate">{sede.ciudad}</span>
+                        <span className={`block text-xs ${n ? "text-[#7A5200]" : "text-[#14652F]"}`}>
+                          {agotados === null
+                            ? "No se pudo consultar ahora"
+                            : n
+                              ? `${n} agotado${n === 1 ? "" : "s"} · vuelven a las ${NOMBRE_HORA(datos.ajustes.hora_reinicio)}`
+                              : "Todo disponible"}
+                        </span>
+                      </span>
+                      {!!n && !confirmando && (
+                        <button type="button" onClick={() => setConfirmarReinicio(sede.id)} className="h-10 px-3 shrink-0 rounded-xl bg-card border-2 border-border text-sm font-semibold text-primary">
+                          Reiniciar
+                        </button>
+                      )}
+                    </div>
+                    {confirmando && (
+                      <div role="alert" className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="flex-1 min-w-[10rem] text-sm font-semibold">¿Poner todo disponible en {sede.ciudad}?</span>
+                        <button type="button" onClick={() => setConfirmarReinicio(null)} className="h-10 px-3 rounded-xl border-2 border-border bg-card font-semibold text-muted-foreground">
+                          No
+                        </button>
+                        <button type="button" onClick={() => reiniciar(sede.id)} disabled={reiniciando} className="h-10 px-3 rounded-xl bg-primary text-primary-foreground font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                          {reiniciando && <Loader2 className="h-4 w-4 animate-spin" />} Sí, reiniciar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            {confirmarReinicio && (
-              <div role="alert" className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center gap-2">
-                <span className="flex-1 min-w-[12rem] text-sm font-semibold">¿Poner todo como disponible en todas las sedes?</span>
-                <button type="button" onClick={() => setConfirmarReinicio(false)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-muted-foreground">
-                  No
-                </button>
-                <button type="button" onClick={reiniciar} disabled={reiniciando} className="h-10 px-3 rounded-xl bg-primary text-primary-foreground font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
-                  {reiniciando && <Loader2 className="h-4 w-4 animate-spin" />} Sí, reiniciar
-                </button>
-              </div>
-            )}
 
             {horaPendiente && sinCambios && (
               <div className="rounded-xl bg-[#FFF1CC] p-3 flex items-center gap-2 text-sm text-[#7A5200]">

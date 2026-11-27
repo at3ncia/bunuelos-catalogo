@@ -49,7 +49,8 @@ export const borrarCategoria = (clave: string, id: string) => rpc("admin_borrar_
 
 export const guardarPunto = (clave: string, p: PuntoPedido) => rpc("admin_guardar_punto", { p_clave: clave, p });
 
-export const reiniciarAgotados = (clave: string) => rpc("admin_reiniciar_agotados", { p_clave: clave });
+export const reiniciarAgotados = (clave: string, sedeId: number) =>
+  rpc("admin_reiniciar_agotados", { p_clave: clave, p_sede: sedeId });
 // Agotados que cuentan hoy, por sede (vista pública de disponibilidad)
 export async function contarAgotados(): Promise<Record<number, number> | null> {
   const { data, error } = await supabase.from("sede_disponibilidad").select("sede_id").eq("disponible", false);

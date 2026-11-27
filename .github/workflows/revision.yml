@@ -1,0 +1,146 @@
+# En cada pull request: compila la web, toma capturas en celular (360 y 390) y PC con
+# datos de prueba, y las publica en un comentario del PR. No usa Netlify (no gasta créditos).
+# También dice qué scripts de sql/ se aplicarán en Supabase al fusionar.
+name: Revisión con capturas
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: revision-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Los scripts de sql/ se prueban en un Postgres desechable antes de tocar Supabase
+  sql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: prueba
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probar scripts de sql/
+        env:
+          PRUEBA_DB_URL: postgresql://postgres:prueba@localhost:5432/postgres
+        run: scripts/prueba-sql/probar.sh
+
+  capturas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+
+      - name: Compilar
+        run: npm run build
+
+      - name: Instalar navegador para capturas
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.49.1
+          npx playwright install --with-deps chromium
+
+      - name: Tomar capturas
+        run: |
+          npx vite preview --port 4173 --strictPort &
+          npx --yes wait-on@8.0.1 -t 60000 http://localhost:4173
+          node scripts/capturas.cjs capturas
+
+      - name: Guardar capturas (descargables)
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas
+          path: capturas
+          retention-days: 14
+
+      - name: Revisar scripts de base de datos pendientes
+        id: sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "texto=⚠️ Falta el secreto SUPABASE_DB_URL: los scripts de sql/ no se aplicarán solos." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          salida=$(scripts/aplicar-sql.sh --revisar 2>&1 || true)
+          {
+            echo "texto<<FIN"
+            echo "**Base de datos al fusionar:**"
+            echo '```'
+            echo "$salida"
+            echo '```'
+            echo "FIN"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publicar capturas en el PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SQL: ${{ steps.sql.outputs.texto }}
+        run: |
+          set -e
+          carpeta="pr-$PR"
+          # Las imágenes van a la rama "capturas" (no toca el código ni dispara Netlify)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin capturas || true
+          git worktree add -B capturas /tmp/capturas origin/capturas 2>/dev/null || {
+            git worktree add --detach /tmp/capturas
+            cd /tmp/capturas && git checkout --orphan capturas && git rm -rfq . && cd -
+          }
+          rm -rf "/tmp/capturas/$carpeta" && mkdir -p "/tmp/capturas/$carpeta"
+          cp capturas/*.png "/tmp/capturas/$carpeta/"
+          cd /tmp/capturas
+          git add -A && git commit -qm "Capturas PR #$PR ($SHA)" && git push -q origin capturas
+          cd -
+          base="https://github.com/${{ github.repository }}/blob/capturas/$carpeta"
+          fila() { # fila "título" archivo... → tabla con 360, 390 y PC
+            echo "| $1 | | |"; echo "|---|---|---|"
+            echo "| <img src=\"$base/360-$2.png?raw=true\" width=\"200\"> | <img src=\"$base/390-$2.png?raw=true\" width=\"200\"> | <img src=\"$base/pc-$2.png?raw=true\" width=\"360\"> |"
+            echo
+          }
+          {
+            echo "<!-- capturas-automaticas -->"
+            echo "## 📱 Capturas automáticas"
+            echo "Commit \`${SHA:0:7}\` · celular 360×640, 390×844 y PC 1366×768 · datos de prueba (sin Supabase)."
+            echo
+            fila "Catálogo" 1-catalogo
+            fila "Formulario del pedido" 2-formulario
+            fila "/links" 3-links
+            fila "Panel · Pedidos" 4-pedidos
+            fila "Panel · Promos" 5-promos
+            fila "Panel · Categorías" 6-categorias
+            fila "Panel · Links" 7-links-panel
+            fila "Panel · Ajustes" 8-ajustes
+            echo "$SQL"
+            echo
+            echo "---"
+            echo "_Generado por GitHub Actions (revision.yml)_"
+          } > comentario.md
+          # Un solo comentario por PR: se actualiza en cada push
+          id=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --paginate \
+                 --jq '.[] | select(.body | startswith("<!-- capturas-automaticas -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -F body=@comentario.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file comentario.md
+          fi
