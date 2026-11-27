@@ -35,7 +35,7 @@ function PrivacidadPage() {
 
         <h2 className="text-xl font-bold mt-8 mb-4 text-foreground">1. Responsable del Tratamiento</h2>
         <p>
-          <strong>DIANA CAROLINA BELALCÁZAR PADILLA</strong>, persona natural comerciante identificada con NIT 1047368628-7, propietaria de los establecimientos de comercio <strong>Refresquería Los Buñuelos</strong> (matrícula mercantil No. 27185402) y <strong>Refresquería Los Buñuelos Castellana</strong> (matrícula mercantil No. 48896802), que operan bajo la marca <strong>Los Buñuelos Los Originales</strong>, con domicilio principal en la Av. Terminal de Transporte 54-70, Piso 1, Local 1, Sector Doña Manuela, Cartagena de Indias, Bolívar, y correo electrónico de contacto jaor_1416@hotmail.com; es responsable de la recopilación y tratamiento de sus datos personales.
+          <strong>DIANA CAROLINA BELALCÁZAR PADILLA</strong>, persona natural comerciante identificada con NIT 1047368628-7, propietaria de los establecimientos de comercio <strong>Refresquería Los Buñuelos</strong> (matrícula mercantil No. 27185402) y <strong>Refresquería Los Buñuelos Castellana</strong> (matrícula mercantil No. 48896802), que operan bajo la marca <strong>Los Buñuelos Los Originales</strong>, con domicilio principal en la Av. Terminal de Transporte 54-70, Piso 1, Local 1, Sector Doña Manuela, Cartagena de Indias, Bolívar, y correo electrónico de contacto <span className="bg-yellow-200/50 dark:bg-yellow-900/50 px-1 rounded">[CORREO DE ATENCIÓN AL CLIENTE]</span>; es responsable de la recopilación y tratamiento de sus datos personales.
         </p>
 
         <h2 className="text-xl font-bold mt-8 mb-4 text-foreground">2. Datos que Recopilamos</h2>
@@ -92,12 +92,12 @@ function PrivacidadPage() {
         <h2 className="text-xl font-bold mt-8 mb-4 text-foreground">7. Derechos de los Titulares</h2>
         <p>
           De conformidad con la Ley 1581 de 2012, el titular de los datos personales tiene derecho a conocer, actualizar, rectificar y solicitar la supresión de sus datos, así como a revocar la autorización otorgada.
-          Para ejercer estos derechos, el titular podrá comunicarse a través del correo electrónico jaor_1416@hotmail.com.
+          Para ejercer estos derechos, el titular podrá comunicarse a través del correo electrónico <span className="bg-yellow-200/50 dark:bg-yellow-900/50 px-1 rounded">[CORREO DE ATENCIÓN AL CLIENTE]</span>.
         </p>
 
         <h2 className="text-xl font-bold mt-8 mb-4 text-foreground">8. Canales de Contacto</h2>
         <ul className="list-disc pl-5 space-y-2">
-          <li><strong>Correo electrónico:</strong> jaor_1416@hotmail.com</li>
+          <li><strong>Correo electrónico:</strong> <span className="bg-yellow-200/50 dark:bg-yellow-900/50 px-1 rounded">[CORREO DE ATENCIÓN AL CLIENTE]</span></li>
           <li><strong>Teléfono:</strong> 310 365 4030</li>
           <li><strong>Dirección:</strong> Av. Terminal de Transporte 54-70, Piso 1, Local 1, Sector Doña Manuela, Cartagena de Indias, Bolívar</li>
         </ul>

@@ -72,3 +72,7 @@ La tabla `pedidos` ya tiene `pago_proveedor` y `pago_referencia`. Para que un pa
 1. Crear cuenta y llaves en Bold.
 2. Crear una función (Supabase Edge Function o Netlify Function) que reciba el *webhook* de Bold, verifique su firma y marque el pedido como `confirmado` con `confirmado_por = 'bold'`.
 3. Agregar el botón "Pagar con Bold" en el formulario del pedido usando el código del pedido como referencia.
+
+## Pendientes
+
+- [ ] **Correo de la política de datos:** definir el correo de atención al cliente (quejas y solicitudes de datos personales) y reemplazar `[CORREO DE ATENCIÓN AL CLIENTE]` en `src/routes/politica-de-privacidad-y-uso-de-datos.tsx` (aparece 3 veces).
