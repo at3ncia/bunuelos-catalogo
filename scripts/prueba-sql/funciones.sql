@@ -38,5 +38,13 @@ begin
   assert (r->>'reiniciados')::int = 1, 'reinicio sede 1: ' || r::text;
   assert (select disponible from sede_productos where sede_id = 1 and producto_id = 'p1'), 'sede 1 sigue agotada';
   assert not (select disponible from sede_productos where sede_id = 2 and producto_id = 'p1'), 'la sede 2 no debía cambiar';
-  raise notice '✓ Funciones 011–013 OK';
+  -- 014: la sede ve por fechas solo sus pedidos
+  perform registrar_pedido('{"sede_id":1,"items":[{"id":"p1","cantidad":1}]}');
+  perform registrar_pedido('{"sede_id":2,"items":[{"id":"p1","cantidad":1}]}');
+  r := sede_listar_pedidos_rango(1, 'Prueba123', current_date - 1, current_date + 1);
+  assert (r->>'ok')::boolean, 'sede rango: ' || r::text;
+  assert (select bool_and((x->>'sede_id')::int = 1) from json_array_elements(r->'pedidos') x), 'la sede ve pedidos de otra';
+  r := sede_listar_pedidos_rango(1, 'mala', current_date - 1, current_date + 1);
+  assert not (r->>'ok')::boolean, 'sede con clave mala debería fallar';
+  raise notice '✓ Funciones 011–014 OK';
 end $$;

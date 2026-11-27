@@ -30,7 +30,8 @@ import {
 } from "@/lib/sedes";
 import { LOGO_OSCURO_URL, FONDO_MANCHAS, AZUL_MARCA } from "@/lib/brand";
 import { ListaPedidos } from "@/components/lista-pedidos";
-import { cambiarEstadoPedido, listarPedidosSede } from "@/lib/negocio";
+import { cambiarEstadoPedido, listarPedidosRangoSede, listarPedidosSede } from "@/lib/negocio";
+import { colorCategoria, FotoProducto } from "@/components/foto-producto";
 
 export const Route = createFileRoute("/sede")({
   head: () => ({
@@ -305,6 +306,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
   const [error, setError] = useState("");
   const [buscar, setBuscar] = useState("");
   const [filtro, setFiltro] = useState<Filtro>("todos");
+  const [cat, setCat] = useState<string | null>(null); // categoría elegida (null = todas)
 
   useEffect(() => {
     (async () => {
@@ -330,14 +332,19 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
   const totalAgot = productos.length - totalDisp;
 
   const visibles = useMemo(() => {
-    const q = buscar.trim().toLowerCase();
+    const q = sinTildes(buscar.trim());
     return productos.filter((p) => {
       const d = estaDisponible(p.id);
       if (filtro === "disponibles" && !d) return false;
       if (filtro === "agotados" && d) return false;
-      return !q || p.nombre.toLowerCase().includes(q);
+      if (cat && p.categoriaId !== cat) return false;
+      return !q || sinTildes(p.nombre).includes(q);
     });
-  }, [productos, disp, buscar, filtro]);
+  }, [productos, disp, buscar, filtro, cat]);
+  // Categorías con productos, y cuántos agotados tiene cada una
+  const chips = categorias
+    .map((c) => ({ ...c, total: productos.filter((p) => p.categoriaId === c.id).length, agotados: productos.filter((p) => p.categoriaId === c.id && !estaDisponible(p.id)).length }))
+    .filter((c) => c.total > 0);
 
   const grupos = useMemo(() => {
     const orden = [...categorias, { id: "__otros", nombre: "Otros" }];
@@ -384,6 +391,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
         <ListaPedidos
           cargar={(dias) => listarPedidosSede(sede.id, clave, dias)}
           cambiarEstado={(id, estado) => cambiarEstadoPedido({ sede: sede.id, clave }, id, estado)}
+          cargarRango={(desde, hasta) => listarPedidosRangoSede(sede.id, clave, desde, hasta)}
         />
       ) : (
       <>
@@ -419,24 +427,63 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
       </p>
 
       <Tarjeta sinPadding className="overflow-hidden">
-        {/* Buscador + filtro activo */}
-        <div className="p-3 border-b border-border flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        {/* Buscador con lupa + categorías como fichas (con agotados en rojo) */}
+        <div className="p-3 border-b border-border space-y-2.5">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
             <input
               value={buscar}
               onChange={(e) => setBuscar(e.target.value)}
-              placeholder="Buscar producto"
-              className="w-full h-10 rounded-lg bg-muted pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              placeholder="Busca el producto"
+              aria-label="Buscar producto"
+              className="w-full h-11 rounded-xl bg-muted pl-10 pr-10 text-base outline-none focus:ring-2 focus:ring-primary/40"
             />
+            {buscar && (
+              <button onClick={() => setBuscar("")} aria-label="Borrar búsqueda" className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-black/5">
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          {filtro !== "todos" && (
-            <button
-              onClick={() => setFiltro("todos")}
-              className="h-10 shrink-0 rounded-lg bg-primary/10 text-primary px-3 text-sm font-semibold inline-flex items-center gap-1"
-            >
-              {filtro === "disponibles" ? "Hay" : "No hay"} <X className="h-3.5 w-3.5" />
-            </button>
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 -mx-1 px-1">
+            {[{ id: null as string | null, nombre: "Todas", agotados: totalAgot, total: productos.length }, ...chips].map((c) => {
+              const activo = cat === c.id;
+              return (
+                <button
+                  key={c.id ?? "todas"}
+                  onClick={() => setCat(c.id)}
+                  aria-pressed={activo}
+                  className={`h-9 shrink-0 rounded-full border-2 px-3 text-sm font-semibold whitespace-nowrap inline-flex items-center gap-1.5 transition ${
+                    activo ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"
+                  }`}
+                >
+                  {c.id && <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorCategoria(categorias, c.id) }} />}
+                  {c.nombre}
+                  {c.agotados > 0 && (
+                    <span className="h-5 min-w-5 px-1 rounded-full bg-[#D92D20] text-white text-[11px] font-bold inline-flex items-center justify-center" aria-label={`${c.agotados} sin existencias`}>
+                      {c.agotados}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {(filtro !== "todos" || cat || buscar) && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="flex-1">
+                Mostrando {visibles.length} de {productos.length}
+                {filtro !== "todos" && <> · solo <strong>{filtro === "disponibles" ? "Hay" : "No hay"}</strong></>}
+              </span>
+              <button
+                onClick={() => {
+                  setFiltro("todos");
+                  setCat(null);
+                  setBuscar("");
+                }}
+                className="h-8 rounded-lg bg-primary/10 text-primary px-3 font-semibold inline-flex items-center gap-1"
+              >
+                Ver todo <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         </div>
 
@@ -459,6 +506,7 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
                   <FilaProducto
                     key={p.id}
                     producto={p}
+                    color={colorCategoria(categorias, p.categoriaId)}
                     disponible={estaDisponible(p.id)}
                     estado={estado[p.id]}
                     onCambiar={(v) => cambiar(p.id, v)}
@@ -476,6 +524,9 @@ function Panel({ sesion, onClave }: { sesion: Sesion; onClave: (c: string) => vo
     </div>
   );
 }
+
+// Búsqueda sin importar tildes ni mayúsculas ("bunuelo" encuentra "Buñuelo")
+const sinTildes = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 function Resumen({
   valor,
@@ -514,11 +565,13 @@ function Resumen({
 
 function FilaProducto({
   producto,
+  color,
   disponible,
   estado,
   onCambiar,
 }: {
   producto: Product;
+  color: string;
   disponible: boolean;
   estado?: Estado;
   onCambiar: (v: boolean) => void;
@@ -537,8 +590,11 @@ function FilaProducto({
           disponible ? "bg-card hover:bg-muted/40" : "bg-[#FFF1F0] hover:bg-[#FFE6E4]"
         }`}
       >
+        <span className={`h-12 w-12 shrink-0 rounded-xl overflow-hidden ${disponible ? "" : "grayscale opacity-60"}`}>
+          <FotoProducto product={producto} color={color} conNombre={false} mascota="w-3/4" />
+        </span>
         <span className="flex-1 min-w-0">
-          <span className={`block font-semibold text-base truncate ${disponible ? "text-foreground" : "text-[#9F1F17]"}`}>
+          <span className={`block font-semibold text-base leading-tight line-clamp-2 ${disponible ? "text-foreground" : "text-[#9F1F17]"}`}>
             {producto.nombre}
           </span>
           <span className="block text-xs text-muted-foreground">{formatCOP(producto.precio)}</span>

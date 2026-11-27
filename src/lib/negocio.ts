@@ -126,6 +126,12 @@ export async function listarPedidosRango(clave: string, desde: string, hasta: st
   return data as RespuestaPedidos;
 }
 
+export async function listarPedidosRangoSede(sedeId: number, clave: string, desde: string, hasta: string): Promise<RespuestaPedidos> {
+  const { data, error } = await supabase.rpc("sede_listar_pedidos_rango", { p_sede: sedeId, p_clave: clave, p_desde: desde, p_hasta: hasta });
+  if (error) return { ok: false, error: traducir(error.message, "014_pedidos_fechas_sede") };
+  return data as RespuestaPedidos;
+}
+
 export async function borrarPedido(clave: string, id: number): Promise<{ ok: boolean; error?: string }> {
   const { data, error } = await supabase.rpc("admin_borrar_pedido", { p_clave: clave, p_id: id });
   if (error) return { ok: false, error: traducir(error.message, "011_pedidos_borrar_y_fechas") };

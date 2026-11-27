@@ -61,6 +61,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 12. `sql/011_pedidos_borrar_y_fechas.sql` — borrar pedidos, limpieza de pendientes de más de 30 días y filtro por fechas
 13. `sql/012_promos_frecuencia.sql` — promos: frecuencia (cada visita / una vez al día / una sola vez) y franja de horas
 14. `sql/013_reiniciar_agotados.sql` — botón "Reiniciar" de agotados por sede en Ajustes
+15. `sql/014_pedidos_fechas_sede.sql` — los encargados ven sus pedidos por fechas en `/sede` (solo lectura)
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 
