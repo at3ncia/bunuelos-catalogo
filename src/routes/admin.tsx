@@ -1663,7 +1663,15 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
       setTimeout(() => document.getElementById(`editor-${pieza}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
     } else {
       setTimeout(
-        () => previewRef.current?.querySelector(`[data-pieza="${pieza}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+        () => {
+          // Se desplaza solo dentro del celular (sin mover la página)
+          const cont = previewRef.current;
+          const el = cont?.querySelector(`[data-pieza="${pieza}"]`);
+          if (!cont || !el) return;
+          const escala = cont.getBoundingClientRect().height / cont.offsetHeight || 1;
+          const y = (el.getBoundingClientRect().top - cont.getBoundingClientRect().top) / escala + cont.scrollTop;
+          cont.scrollTo({ top: Math.max(0, y - 80), behavior: "smooth" });
+        },
         80,
       );
     }
@@ -1683,22 +1691,18 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
   };
 
   const vistaPrevia = (
-    <div className="mx-auto w-full max-w-[380px]">
-      <div className="rounded-[2.2rem] border-[10px] border-[#0b1530] bg-[#0b1530] shadow-2xl overflow-hidden">
-        <div className="h-5 flex items-center justify-center bg-[#0b1530]">
-          <span className="h-1.5 w-16 rounded-full bg-white/20" />
-        </div>
-        <div ref={previewRef} className="h-[min(70dvh,680px)] lg:h-[calc(100dvh-12rem)] overflow-y-auto overscroll-contain rounded-b-[1.4rem]">
-          <LinksVista ajustes={final} puntos={puntos} ciudades={ciudades} preview={{ seleccion, onElegir: (p) => elegir(p, true) }} />
-        </div>
-      </div>
+    <div>
+      <PantallaCelular scrollRef={previewRef}>
+        <LinksVista ajustes={final} puntos={puntos} ciudades={ciudades} preview={{ seleccion, onElegir: (p) => elegir(p, true) }} />
+      </PantallaCelular>
       <p className="mt-2 text-center text-xs text-muted-foreground">Toca un botón de la vista previa para editarlo.</p>
     </div>
   );
 
   return (
     <div className="lg:w-[min(72rem,calc(100vw-3rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2 space-y-4">
-      <div className="lg:hidden sticky top-2 z-30 grid grid-cols-2 gap-1 bg-card border border-border rounded-xl p-1 shadow-card">
+      <div className="sticky top-2 z-30 bg-card border border-border rounded-2xl p-1.5 shadow-card space-y-1.5">
+      <div className="lg:hidden grid grid-cols-2 gap-1">
         {(
           [
             ["editar", "Editar", Pencil],
@@ -1714,6 +1718,31 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
             <Icono className="h-4 w-4" /> {texto}
           </button>
         ))}
+      </div>
+        <div className={`flex items-center gap-2 rounded-xl pl-3 p-1 ${sinCambios ? "bg-muted/60" : "bg-[#FFF1CC]"}`}>
+          {sinCambios ? (
+            <span className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#14652F]">
+              <Check className="h-4 w-4 shrink-0" /> Todo guardado
+            </span>
+          ) : (
+            <span className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#7A5200]">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-[#D9731B] animate-pulse" /> <span className="truncate"><span className="min-[420px]:hidden">Sin guardar</span><span className="hidden min-[420px]:inline">Cambios sin guardar</span></span>
+            </span>
+          )}
+          {!sinCambios && (
+            <button type="button" onClick={reiniciar} className="h-10 px-3 rounded-lg text-sm font-semibold text-muted-foreground hover:bg-black/5">
+              Descartar
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={guardar}
+            disabled={guardando || sinCambios}
+            className="h-10 px-4 rounded-lg bg-[#D9731B] text-white font-bold inline-flex items-center gap-2 disabled:opacity-40"
+          >
+            {guardando && <Loader2 className="h-4 w-4 animate-spin" />} Guardar
+          </button>
+        </div>
       </div>
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start">
@@ -1966,25 +1995,45 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
           </SeccionLinks>
         </div>
 
-        <div className={`lg:sticky lg:top-4 ${vista === "editar" ? "hidden lg:block" : ""}`}>{vistaPrevia}</div>
+        <div className={`lg:sticky lg:top-32 ${vista === "editar" ? "hidden lg:block" : ""}`}>{vistaPrevia}</div>
       </div>
 
-      {!sinCambios && (
-        <div className="sticky bottom-3 z-30 flex items-center gap-2 rounded-2xl bg-[#0b1530] text-white p-2 pl-4 shadow-2xl">
-          <span className="flex-1 text-sm font-semibold">Cambios sin guardar</span>
-          <button type="button" onClick={reiniciar} className="h-11 px-3 rounded-xl text-sm font-semibold text-white/80 hover:bg-white/10">
-            Descartar
-          </button>
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={guardando}
-            className="h-11 px-4 rounded-xl bg-[#D9731B] text-white font-bold inline-flex items-center gap-2 disabled:opacity-50"
-          >
-            {guardando && <Loader2 className="h-4 w-4 animate-spin" />} Guardar
-          </button>
+    </div>
+  );
+}
+
+// Celular de la vista previa: la página se dibuja a 360 px de ancho (como un celular real) y se
+// ajusta completa al marco, sin cortes ni barras de desplazamiento; cabe en la pantalla del equipo.
+const ANCHO_CELULAR = 360;
+function PantallaCelular({ children, scrollRef }: { children: React.ReactNode; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+  const marco = useRef<HTMLDivElement>(null);
+  const [medida, setMedida] = useState({ w: ANCHO_CELULAR, h: 740 });
+  useEffect(() => {
+    const el = marco.current;
+    if (!el) return;
+    const medir = () => setMedida({ w: el.clientWidth, h: el.clientHeight });
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const escala = medida.w / ANCHO_CELULAR;
+  return (
+    <div
+      // Ancho: el disponible (máx. 380 px) sin pasar del alto de la pantalla.
+      // En celular el marco es 9:16 para aprovechar el ancho; en PC, 9:19,5 como un teléfono real.
+      className="mx-auto rounded-[2.4rem] bg-[#0b1530] p-[10px] shadow-2xl ring-1 ring-black/10 w-[min(100%,380px,calc((100dvh_-_8rem)*0.5625))] lg:w-[min(100%,380px,calc((100dvh_-_10rem)*0.4615))]"
+    >
+      <div ref={marco} className="relative w-full aspect-[9/16] lg:aspect-[9/19.5] rounded-[1.8rem] overflow-hidden bg-[#0E47D6]">
+        <div
+          ref={scrollRef}
+          className="sin-scrollbar absolute left-0 top-0 overflow-y-auto overflow-x-hidden overscroll-contain"
+          style={{ width: ANCHO_CELULAR, height: medida.h / escala, transform: `scale(${escala})`, transformOrigin: "top left" }}
+        >
+          {children}
         </div>
-      )}
+        <span className="pointer-events-none absolute top-1.5 left-1/2 -translate-x-1/2 h-4 w-16 rounded-full bg-[#0b1530]" />
+      </div>
     </div>
   );
 }

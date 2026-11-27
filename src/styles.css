@@ -148,3 +148,7 @@
 @media (prefers-reduced-motion: reduce) {
   .btn-dorado::after { animation: none; display: none; }
 }
+
+/* Contenedor con desplazamiento pero sin barra visible (vista previa del celular) */
+.sin-scrollbar { scrollbar-width: none; }
+.sin-scrollbar::-webkit-scrollbar { display: none; }

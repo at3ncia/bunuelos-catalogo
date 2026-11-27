@@ -78,23 +78,25 @@ export function LinksVista({ ajustes, puntos, ciudades, preview }: Props) {
       style={{ backgroundColor: AZUL_MARCA, backgroundImage: FONDO_MANCHAS, backgroundSize: "340px 340px" }}
     >
       <div className="w-full max-w-md">
-        <div className="flex items-center justify-between">
+        <div className={`flex items-center justify-between gap-2 ${preview ? "pt-7" : ""}`}>
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur ${
+            className={`min-w-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur ${
               estado.abierto ? "bg-[#1F9D4C]/90" : "bg-black/30"
             }`}
           >
-            <span className={`h-2 w-2 rounded-full ${estado.abierto ? "bg-white animate-pulse" : "bg-white/60"}`} />
+            <span className={`h-2 w-2 shrink-0 rounded-full ${estado.abierto ? "bg-white animate-pulse" : "bg-white/60"}`} />
+            <span className="truncate">
             {estado.abierto
               ? `Domicilios abiertos · hasta ${estado.cierra}`
               : estado.abre
                 ? `Domicilios cerrados · abrimos ${estado.abre.cuando} ${estado.abre.hora}`
                 : "Domicilios cerrados"}
+            </span>
           </span>
           <button
             onClick={compartir}
             aria-label="Compartir"
-            className="h-10 w-10 rounded-full bg-white/10 border border-white/15 flex items-center justify-center hover:bg-white/20 transition"
+            className="h-10 w-10 shrink-0 rounded-full bg-white/10 border border-white/15 flex items-center justify-center hover:bg-white/20 transition"
           >
             <Share2 className="h-4 w-4" />
           </button>
