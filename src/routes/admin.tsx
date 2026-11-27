@@ -66,6 +66,8 @@ import {
   guardarPromo,
   listarBarriosAdmin,
   listarPedidosAdmin,
+  listarPedidosRango,
+  borrarPedido,
   listarPromosAdmin,
   promoVigente,
   type Barrio,
@@ -309,6 +311,8 @@ function Panel({
           sedes={datos.sedes}
           cargar={(dias) => listarPedidosAdmin(clave, dias)}
           cambiarEstado={(id, estado) => cambiarEstadoPedido({ admin: clave }, id, estado)}
+          cargarRango={(desde, hasta) => listarPedidosRango(clave, desde, hasta)}
+          borrar={(id) => borrarPedido(clave, id)}
         />
       ) : pestana === "promos" ? (
         <PestanaPromos datos={datos} clave={clave} ejecutar={ejecutar} />

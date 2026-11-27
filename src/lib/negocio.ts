@@ -106,6 +106,18 @@ export async function listarPedidosAdmin(clave: string, dias: number): Promise<R
   return data as RespuestaPedidos;
 }
 
+export async function listarPedidosRango(clave: string, desde: string, hasta: string): Promise<RespuestaPedidos> {
+  const { data, error } = await supabase.rpc("admin_listar_pedidos_rango", { p_clave: clave, p_desde: desde, p_hasta: hasta });
+  if (error) return { ok: false, error: traducir(error.message, "011_pedidos_borrar_y_fechas") };
+  return data as RespuestaPedidos;
+}
+
+export async function borrarPedido(clave: string, id: number): Promise<{ ok: boolean; error?: string }> {
+  const { data, error } = await supabase.rpc("admin_borrar_pedido", { p_clave: clave, p_id: id });
+  if (error) return { ok: false, error: traducir(error.message, "011_pedidos_borrar_y_fechas") };
+  return data as { ok: boolean; error?: string };
+}
+
 export async function listarPedidosSede(sedeId: number, clave: string, dias: number): Promise<RespuestaPedidos> {
   const { data, error } = await supabase.rpc("sede_listar_pedidos", { p_sede: sedeId, p_clave: clave, p_dias: dias });
   if (error) return { ok: false, error: traducir(error.message) };
@@ -125,8 +137,8 @@ export async function cambiarEstadoPedido(
   return data as { ok: boolean; error?: string };
 }
 
-function traducir(msg: string) {
-  return /does not exist|could not find/i.test(msg) ? "Falta ejecutar sql/009_pedidos_promos_domicilios.sql en Supabase" : msg;
+function traducir(msg: string, archivo = "009_pedidos_promos_domicilios") {
+  return /does not exist|could not find/i.test(msg) ? `Falta ejecutar sql/${archivo}.sql en Supabase` : msg;
 }
 
 // ── Panel del dueño ─────────────────────────────────────────────────────────

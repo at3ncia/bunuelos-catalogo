@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, Loader2, RefreshCw, RotateCcw, X } from "lucide-react";
+import { CalendarDays, Check, ChevronDown, Loader2, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { formatCOP } from "@/lib/cart";
 import type { EstadoPedido, Pedido } from "@/lib/negocio";
 import type { Sede } from "@/lib/sedes";
@@ -9,7 +9,27 @@ type Props = {
   cargar: (dias: number) => Promise<{ ok: boolean; error?: string; pedidos?: Pedido[] }>;
   cambiarEstado: (id: number, estado: EstadoPedido) => Promise<{ ok: boolean; error?: string }>;
   sedes?: Sede[]; // si se pasa, muestra la ciudad de cada pedido
+  cargarRango?: (desde: string, hasta: string) => Promise<{ ok: boolean; error?: string; pedidos?: Pedido[] }>; // solo dueño
+  borrar?: (id: number) => Promise<{ ok: boolean; error?: string }>; // solo dueño
 };
+
+// Fechas en hora de Colombia, formato AAAA-MM-DD
+const hoyCol = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+const dos = (n: number) => String(n).padStart(2, "0");
+const finDeMes = (a: number, m: number) => `${a}-${dos(m)}-${dos(new Date(a, m, 0).getDate())}`;
+function atajos() {
+  const [a, m] = hoyCol().split("-").map(Number);
+  const pa = m === 1 ? a - 1 : a;
+  const pm = m === 1 ? 12 : m - 1;
+  return [
+    { texto: "Este mes", desde: `${a}-${dos(m)}-01`, hasta: hoyCol() },
+    { texto: "Mes pasado", desde: `${pa}-${dos(pm)}-01`, hasta: finDeMes(pa, pm) },
+    { texto: `Año ${a}`, desde: `${a}-01-01`, hasta: hoyCol() },
+    { texto: `Año ${a - 1}`, desde: `${a - 1}-01-01`, hasta: `${a - 1}-12-31` },
+  ];
+}
+const fechaCorta = (f: string) =>
+  new Date(`${f}T12:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
 
 const RANGOS = [
   { dias: 1, texto: "Hoy" },
@@ -29,8 +49,11 @@ const NOMBRE_ESTADO: Record<EstadoPedido, string> = {
 };
 
 // Registro de pedidos con confirmación manual. Se actualiza solo cada 30 s.
-export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
-  const [dias, setDias] = useState(1);
+export function ListaPedidos({ cargar, cambiarEstado, sedes, cargarRango, borrar }: Props) {
+  const [dias, setDias] = useState(1); // 0 = por fechas
+  const [desde, setDesde] = useState(() => atajos()[0].desde);
+  const [hasta, setHasta] = useState(hoyCol);
+  const [porBorrar, setPorBorrar] = useState<number | null>(null);
   const [filtro, setFiltro] = useState<EstadoPedido | "todos">("todos");
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
   const [error, setError] = useState("");
@@ -39,8 +62,12 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
   const [ocupado, setOcupado] = useState<number | null>(null);
 
   const refrescar = async () => {
+    if (dias === 0 && (!desde || !hasta || hasta < desde)) {
+      setError('Revisa las fechas: "Hasta" debe ser igual o después de "Desde".');
+      return;
+    }
     setCargando(true);
-    const r = await cargar(dias);
+    const r = dias === 0 && cargarRango ? await cargarRango(desde, hasta) : await cargar(dias);
     setCargando(false);
     if (r.ok) {
       setPedidos(r.pedidos ?? []);
@@ -50,10 +77,11 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
 
   useEffect(() => {
     refrescar();
+    if (dias === 0) return; // por fechas no se actualiza solo
     const t = setInterval(refrescar, 30_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dias]);
+  }, [dias, desde, hasta]);
 
   const visibles = useMemo(
     () => (pedidos ?? []).filter((p) => filtro === "todos" || p.estado === filtro),
@@ -70,17 +98,29 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
     else setError(r.error ?? "No se pudo actualizar");
   };
 
+  const eliminar = async (p: Pedido) => {
+    if (!borrar) return;
+    setOcupado(p.id);
+    const r = await borrar(p.id);
+    setOcupado(null);
+    setPorBorrar(null);
+    if (r.ok) setPedidos((lista) => (lista ?? []).filter((x) => x.id !== p.id));
+    else setError(r.error ?? "No se pudo borrar");
+  };
+  const rangos = cargarRango ? [...RANGOS, { dias: 0, texto: "Fechas" }] : RANGOS;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <div className="flex-1 grid grid-cols-3 gap-1 bg-card border border-border rounded-xl p-1">
-          {RANGOS.map((r) => (
+        <div className={`flex-1 grid ${rangos.length === 4 ? "grid-cols-4" : "grid-cols-3"} gap-1 bg-card border border-border rounded-xl p-1`}>
+          {rangos.map((r) => (
             <button
               key={r.dias}
               onClick={() => setDias(r.dias)}
               aria-pressed={dias === r.dias}
-              className={`h-9 rounded-lg text-sm font-semibold ${dias === r.dias ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              className={`h-9 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-1 ${dias === r.dias ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
             >
+              {r.dias === 0 && <CalendarDays className="h-4 w-4 hidden min-[380px]:inline" />}
               {r.texto}
             </button>
           ))}
@@ -93,6 +133,44 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
           <RefreshCw className={`h-5 w-5 ${cargando ? "animate-spin" : ""}`} />
         </button>
       </div>
+
+      {dias === 0 && (
+        <div className="bg-card border border-border rounded-2xl p-3 space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {atajos().map((a) => {
+              const activo = a.desde === desde && a.hasta === hasta;
+              return (
+                <button
+                  key={a.texto}
+                  onClick={() => {
+                    setDesde(a.desde);
+                    setHasta(a.hasta);
+                  }}
+                  aria-pressed={activo}
+                  className={`h-9 px-3 rounded-full text-sm font-semibold border ${activo ? "bg-primary text-primary-foreground border-primary" : "border-border text-foreground"}`}
+                >
+                  {a.texto}
+                </button>
+              );
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="text-xs font-semibold text-muted-foreground">
+              Desde
+              <input type="date" value={desde} max={hoyCol()} onChange={(e) => setDesde(e.target.value)} className="mt-1 block w-full h-11 rounded-xl border border-border bg-background px-2 text-sm text-foreground" />
+            </label>
+            <label className="text-xs font-semibold text-muted-foreground">
+              Hasta
+              <input type="date" value={hasta} max={hoyCol()} onChange={(e) => setHasta(e.target.value)} className="mt-1 block w-full h-11 rounded-xl border border-border bg-background px-2 text-sm text-foreground" />
+            </label>
+          </div>
+          {desde && hasta && hasta >= desde && (
+            <p className="text-xs text-muted-foreground">
+              Mostrando del <strong className="text-foreground">{fechaCorta(desde)}</strong> al <strong className="text-foreground">{fechaCorta(hasta)}</strong>
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2">
         <Resumen valor={conteo("pendiente")} texto="Pendientes" tono="bg-[#FFF1CC] text-[#7A5200]" activo={filtro === "pendiente"} onClick={() => setFiltro(filtro === "pendiente" ? "todos" : "pendiente")} />
@@ -119,7 +197,7 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
             const ciudad = sedes?.find((s) => s.id === p.sede_id)?.ciudad;
             const hora = new Date(p.creado_en).toLocaleString("es-CO", {
               timeZone: "America/Bogota",
-              ...(dias === 1 ? { hour: "numeric", minute: "2-digit" } : { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }),
+              ...(dias === 1 ? { hour: "numeric", minute: "2-digit" } : dias === 0 ? { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" } : { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }),
             });
             return (
               <li key={p.id} className="bg-card border border-border rounded-2xl shadow-card overflow-hidden">
@@ -180,6 +258,11 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
                           <RotateCcw className="h-4 w-4" /> Pendiente
                         </Accion>
                       )}
+                      {borrar && porBorrar !== p.id && (
+                        <Accion onClick={() => setPorBorrar(p.id)} ocupado={false} clase="border-2 border-destructive/40 text-destructive">
+                          <Trash2 className="h-4 w-4" /> Borrar
+                        </Accion>
+                      )}
                       {telefono && (
                         <a
                           href={`https://wa.me/${(() => {
@@ -194,6 +277,20 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes }: Props) {
                         </a>
                       )}
                     </div>
+                    {porBorrar === p.id && (
+                      <div role="alert" className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 space-y-2">
+                        <p className="font-semibold text-destructive">¿Borrar el pedido #{p.codigo} para siempre?</p>
+                        <p className="text-xs text-muted-foreground">No se puede deshacer y deja de contar en las ventas.</p>
+                        <div className="flex gap-2">
+                          <Accion onClick={() => eliminar(p)} ocupado={ocupado === p.id} clase="bg-destructive text-destructive-foreground">
+                            <Trash2 className="h-4 w-4" /> Sí, borrar
+                          </Accion>
+                          <Accion onClick={() => setPorBorrar(null)} ocupado={false} clase="border-2 border-border text-muted-foreground">
+                            No
+                          </Accion>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </li>
