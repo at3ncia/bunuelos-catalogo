@@ -4,7 +4,10 @@
 -- Toda llamada lleva la "clave de la IA" (se genera en /admin → Claves y se pega
 -- una sola vez en APEX). Ejecutar después de 015. Se puede ejecutar más de una vez.
 --
--- Llamadas (POST https://<proyecto>.supabase.co/rest/v1/rpc/<función>, con la clave pública):
+-- APEX usa UNA sola herramienta: POST https://<proyecto>.supabase.co/rest/v1/rpc/ia
+--   encabezados: apikey y Authorization (clave pública de Supabase) + x-clave-ia (clave de la IA)
+--   cuerpo: { "p_accion": "menu|domicilio|registrar|comprobante|estado", "p_punto": "...", "p_datos": {...} }
+-- Por dentro llama a (también se pueden usar sueltas, con p_clave):
 --   ia_menu            { p_clave, p_punto }                      → productos disponibles HOY en ese punto
 --   ia_domicilio       { p_clave, p_punto, p_barrio }            → precio del domicilio (o "por confirmar")
 --   ia_registrar_pedido{ p_clave, p }                            → código, subtotal, domicilio y total reales
@@ -191,3 +194,21 @@ grant execute on function ia_domicilio(text, text, text) to anon, authenticated;
 grant execute on function ia_registrar_pedido(text, jsonb) to anon, authenticated;
 grant execute on function ia_comprobante(text, text) to anon, authenticated;
 grant execute on function ia_estado_pedido(text, text) to anon, authenticated;
+
+-- ── Una sola puerta para APEX ──────────────────────────────────────────────
+-- La clave llega en el encabezado x-clave-ia (la IA no la ve ni la puede repetir al cliente).
+create or replace function ia(p_accion text, p_punto text default null, p_datos jsonb default '{}'::jsonb)
+returns json language plpgsql security definer set search_path = public, extensions as $$
+declare v_clave text; d jsonb := coalesce(p_datos, '{}'::jsonb);
+begin
+  v_clave := coalesce(nullif(current_setting('request.headers', true), '')::json->>'x-clave-ia', d->>'clave');
+  return case lower(coalesce(p_accion, ''))
+    when 'menu' then ia_menu(v_clave, p_punto)
+    when 'domicilio' then ia_domicilio(v_clave, p_punto, d->>'barrio')
+    when 'registrar' then ia_registrar_pedido(v_clave, d || jsonb_build_object('punto_id', p_punto))
+    when 'comprobante' then ia_comprobante(v_clave, d->>'codigo')
+    when 'estado' then ia_estado_pedido(v_clave, d->>'codigo')
+    else json_build_object('ok', false, 'error', 'p_accion debe ser menu, domicilio, registrar, comprobante o estado')
+  end;
+end $$;
+grant execute on function ia(text, text, jsonb) to anon, authenticated;

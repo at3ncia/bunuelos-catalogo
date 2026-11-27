@@ -104,5 +104,16 @@ begin
   assert (ia_estado_pedido(cod, r->>'codigo')->>'estado') = 'pendiente', 'estado del pedido';
   r := ia_registrar_pedido(cod, '{"punto_id":"pt1","items":[{"id":"p1","cantidad":1}],"nombre":"","telefono":"12","direccion":"x","metodo_pago":"efectivo"}');
   assert not (r->>'ok')::boolean, 'faltan datos debería fallar';
+  -- Puerta única con la clave en el encabezado (como la llama APEX)
+  perform set_config('request.headers', json_build_object('x-clave-ia', cod)::text, true);
+  r := ia('menu', 'pt1');
+  assert (r->>'ok')::boolean, 'ia(menu) con encabezado: ' || r::text;
+  r := ia('domicilio', 'pt1', '{"barrio":"crespo"}');
+  assert (r->>'precio')::int = 6000, 'ia(domicilio): ' || r::text;
+  r := ia('registrar', 'pt1', '{"items":[{"id":"p1","cantidad":1}],"nombre":"Leo","telefono":"3001231234","direccion":"Calle 1","barrio":"Crespo","metodo_pago":"efectivo"}');
+  assert (r->>'ok')::boolean, 'ia(registrar): ' || r::text;
+  assert (ia('estado', null, json_build_object('codigo', r->>'codigo')::jsonb)->>'estado') = 'pendiente', 'ia(estado)';
+  perform set_config('request.headers', '{"x-clave-ia":"mala"}', true);
+  assert not (ia('menu', 'pt1')->>'ok')::boolean, 'clave mala en encabezado debe fallar';
   raise notice '✓ Funciones 011–016 OK';
 end $$;

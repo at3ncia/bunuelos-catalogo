@@ -1,0 +1,40 @@
+Centro, 3000
+El Prado, 5000
+Cinco Colores, 5000
+Hospital Barranquilla, 5000
+La Luz Centro, 5000
+Laboratorio Incas, 6000
+Calle 30 #2, 6000
+Chiquinquirá, 6000
+Cervecería Águila, 6000
+C.C. Miami, 6000
+Riomar, 7000
+Norte Centro Histórico, 7000
+Diana, 7000
+Zona Blanca, 7000
+Puerto Barranquilla, 7000
+San José, 7000
+El Bosque, 7000
+Barranquillita, 7000
+El Carmen, 8000
+Barrio Abajo, 8000
+Vía 40 con 72, 8000
+Boston Norte, 8000
+Olaya, 8000
+Paseo La Chinita, 10000
+Barrio Unión, 10000
+Clínica San Martín, 10000
+El Silencio, 10000
+La Victoria, 10000
+Clínica de la Costa, 12000
+La Paz, 12000
+Soledad, 12000
+El Golf, 12000
+Villa Carolina, 12000
+Villa Santos, 12000
+Cuadrada, 15000
+Miramar, 15000
+Alameda del Río, 17000
+Galapa Ultracem, 17000
+Villa Campestre, 20000
+Galapa Pueblo, 20000

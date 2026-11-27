@@ -1,5 +1,29 @@
 # Conexión con APEX (IA de WhatsApp e Instagram)
 
+## Estado (27 nov 2026)
+
+**Ya configurado en APEX (por Claude):**
+- Barranquilla (922): asistente 550 con instrucciones nuevas (`apex/instrucciones-ventas-barranquilla.md`),
+  GPT-5.6 Luna, herramienta `plataforma` (id 165), eventos 113–117, 2 follow-ups, paso a humano a la
+  columna ASESOR🧡, automatización 💸 Deal con el total real. Respaldo: `apex/respaldo-barranquilla-2026-11-27.md`.
+- Cartagena (954): asistentes **Ventas Cartagena 🧡** (1979) e **Instagram 🧡** (1980), GPT-5.6 Luna,
+  herramienta `plataforma` (id 166), eventos 118–123, follow-ups y paso a humano.
+
+**Te toca (en la app de APEX, una sola vez):**
+1. En la herramienta `plataforma` de cada organización, reemplazar en los encabezados
+   `PEGAR_CLAVE_PUBLICA_SUPABASE` (Supabase → Settings → API → clave *anon public*, dos veces) y
+   `PEGAR_CLAVE_DE_LA_IA` (/admin → Claves → Generar clave de la IA).
+2. Conectar canales: Ventas Cartagena → los 2 WhatsApp de Cartagena; Instagram 🧡 → Instagram;
+   asistente 550 → WhatsApp Barranquilla.
+3. Cartagena: completar en las instrucciones los `[PENDIENTE]` (Nequi, Bancolombia y horario) y
+   configurar el horario del asistente.
+4. Crear columnas y automatizaciones (secciones 2 y 3). En "💸 Deal" (Barranquilla) cambiar la
+   organización de la nota a la propia (hoy apunta a 953). Crear "💸 Deal" en Cartagena.
+5. Barranquilla: pegar `apex/tarifas-barranquilla-para-pegar.txt` en /admin → Domicilios →
+   "Pegar lista" (Barranquilla) y luego borrar el skill `tarifas_domicilio_barranquilla` (id 273).
+6. Probar con un número de prueba antes de abrir a clientes: pedir menú, un agotado, un barrio que
+   no existe, registrar con transferencia + pantallazo, y "♻️ Reiniciar".
+
 Guía para dejar APEX trabajando con la plataforma. Regla de fondo:
 
 - **La plataforma** (Supabase + /admin + /sede) es la verdad de **productos, disponibilidad,
