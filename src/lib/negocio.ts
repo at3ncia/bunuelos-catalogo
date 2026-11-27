@@ -17,7 +17,11 @@ export type Promo = {
   hasta: string | null;
   activo: boolean;
   orden: number;
+  frecuencia?: FrecuenciaPromo; // falta si no se ha ejecutado sql/012 → "dia"
+  hora_desde?: string | null; // "HH:MM" hora de Colombia; null = todo el día
+  hora_hasta?: string | null;
 };
+export type FrecuenciaPromo = "visita" | "dia" | "una_vez";
 
 export type ItemPedido = { id: string; nombre: string; precio: number; cantidad: number };
 export type EstadoPedido = "pendiente" | "confirmado" | "cancelado";
@@ -71,6 +75,16 @@ export function promoVigente(p: Promo, base = new Date()) {
   if (p.hasta && hoy > p.hasta) return false;
   if (p.dias && p.dias.length && !p.dias.includes(ahoraColombia(base).diaSemana)) return false;
   return true;
+}
+
+// ¿Está dentro de su franja de horas? (sin franja = todo el día; admite franjas que pasan la medianoche)
+export function promoEnHorario(p: Promo, base = new Date()) {
+  if (!p.hora_desde || !p.hora_hasta) return true;
+  const m = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+  const ahora = ahoraColombia(base).minutos;
+  const d = m(p.hora_desde);
+  const h = m(p.hora_hasta);
+  return d <= h ? ahora >= d && ahora < h : ahora >= d || ahora < h;
 }
 
 // ── Pedidos ─────────────────────────────────────────────────────────────────

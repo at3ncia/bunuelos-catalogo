@@ -18,6 +18,9 @@ import {
   Bike,
   ClipboardList,
   Megaphone,
+  Package,
+  Pause,
+  Pencil,
   Settings2,
   Store,
   Tag,
@@ -72,6 +75,7 @@ import {
   promoVigente,
   type Barrio,
   type Promo,
+  type FrecuenciaPromo,
 } from "@/lib/negocio";
 import { WhatsAppIcon } from "@/components/whatsapp-icon";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -688,7 +692,28 @@ const PROMO_NUEVA = (): Promo => ({
   hasta: null,
   activo: true,
   orden: 0,
+  frecuencia: "dia",
+  hora_desde: null,
+  hora_hasta: null,
 });
+
+const FRECUENCIAS: { id: FrecuenciaPromo; texto: string; detalle: string }[] = [
+  { id: "visita", texto: "Cada vez que entran", detalle: "Sale en cada visita al menú" },
+  { id: "dia", texto: "Una vez al día", detalle: "Máximo una vez al día por cliente" },
+  { id: "una_vez", texto: "Solo una vez", detalle: "Cada cliente la ve una sola vez" },
+];
+const MOMENTOS: { texto: string; detalle: string; desde: string | null; hasta: string | null }[] = [
+  { texto: "Todo el día", detalle: "Siempre", desde: null, hasta: null },
+  { texto: "Mañana", detalle: "5 a. m. – 12 m.", desde: "05:00", hasta: "12:00" },
+  { texto: "Tarde", detalle: "12 m. – 6 p. m.", desde: "12:00", hasta: "18:00" },
+  { texto: "Noche", detalle: "6 p. m. – 11 p. m.", desde: "18:00", hasta: "23:00" },
+];
+const horaBonita = (h: string) => {
+  const [hh, mm] = h.split(":").map(Number);
+  const s = hh < 12 ? "a. m." : "p. m.";
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  return `${h12}${mm ? `:${String(mm).padStart(2, "0")}` : ""} ${s}`;
+};
 
 function resumenPromo(p: Promo) {
   const partes: string[] = [];
@@ -697,6 +722,8 @@ function resumenPromo(p: Promo) {
   if (p.desde && p.hasta) partes.push(`del ${f(p.desde)} al ${f(p.hasta)}`);
   else if (p.desde) partes.push(`desde el ${f(p.desde)}`);
   else if (p.hasta) partes.push(`hasta el ${f(p.hasta)}`);
+  if (p.hora_desde && p.hora_hasta) partes.push(`${horaBonita(p.hora_desde)} a ${horaBonita(p.hora_hasta)}`);
+  partes.push(FRECUENCIAS.find((x) => x.id === (p.frecuencia ?? "dia"))!.texto.toLowerCase());
   return partes.join(" · ");
 }
 
@@ -704,6 +731,22 @@ function PestanaPromos({ datos, clave, ejecutar }: PropsPestana) {
   const [promos, setPromos] = useState<Promo[] | null>(null);
   const [editando, setEditando] = useState<Promo | null>(null);
   const [error, setError] = useState("");
+  const [ocupadoId, setOcupadoId] = useState<string | null>(null);
+  const [porBorrar, setPorBorrar] = useState<string | null>(null);
+  const pausar = async (p: Promo, activo: boolean) => {
+    setOcupadoId(p.id);
+    setPromos((l) => (l ?? []).map((x) => (x.id === p.id ? { ...x, activo } : x)));
+    const ok = await ejecutar(guardarPromo(clave, { ...p, activo }), activo ? "Promo activada" : "Promo pausada");
+    if (!ok) setPromos((l) => (l ?? []).map((x) => (x.id === p.id ? { ...x, activo: p.activo } : x)));
+    setOcupadoId(null);
+  };
+  const quitar = async (p: Promo) => {
+    setOcupadoId(p.id);
+    const ok = await ejecutar(borrarPromo(clave, p.id), "Promo borrada");
+    setOcupadoId(null);
+    setPorBorrar(null);
+    if (ok) setPromos((l) => (l ?? []).filter((x) => x.id !== p.id));
+  };
   const cargar = async () => {
     const r = await listarPromosAdmin(clave);
     if (r.ok) setPromos((r as { promos?: Promo[] }).promos ?? []);
@@ -718,8 +761,8 @@ function PestanaPromos({ datos, clave, ejecutar }: PropsPestana) {
     <div className="space-y-4">
       <Tarjeta>
         <p className="text-sm text-muted-foreground">
-          Las promos salen como ventana emergente al abrir el menú, una vez al día por cliente. Programa los días y las
-          fechas: por ejemplo, el 2x1 solo los martes. Imagen vertical 3:4 (ideal 1080 × 1440).
+          Las promos salen como ventana emergente al abrir el menú. Elige cuándo y cada cuánto: por ejemplo, el 2x1
+          solo los martes en la tarde, una vez al día. Imagen vertical 3:4 (ideal 1080 × 1440).
         </p>
       </Tarjeta>
       {error && <p role="alert" className="rounded-xl bg-destructive/10 text-destructive text-sm px-4 py-3">{error}</p>}
@@ -730,21 +773,56 @@ function PestanaPromos({ datos, clave, ejecutar }: PropsPestana) {
           {(promos ?? []).map((p) => {
             const hoy = promoVigente(p);
             const producto = datos.productos.find((x) => x.id === p.producto_id);
+            const ocupado = ocupadoId === p.id;
             return (
-              <li key={p.id}>
-                <button onClick={() => setEditando(p)} className="w-full bg-card border border-border rounded-2xl shadow-card p-3 flex gap-3 text-left">
-                  <span className="h-24 aspect-[3/4] shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center">
+              <li key={p.id} className={`bg-card border border-border rounded-2xl shadow-card overflow-hidden transition ${p.activo ? "" : "opacity-75"}`}>
+                <button onClick={() => setEditando(p)} className="w-full p-3 flex gap-3 text-left">
+                  <span className={`h-24 aspect-[3/4] shrink-0 rounded-xl overflow-hidden bg-muted flex items-center justify-center ${p.activo ? "" : "grayscale"}`}>
                     {p.imagen ? <img src={p.imagen} alt="" className="w-full h-full object-cover" /> : <Camera className="h-6 w-6 text-muted-foreground" />}
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block font-display font-bold text-primary truncate">{p.titulo || "Promo sin título"}</span>
                     <span className="block text-xs text-muted-foreground">{resumenPromo(p)}</span>
                     {producto && <span className="block text-xs mt-1">Producto: {producto.nombre}</span>}
-                    <span className="mt-1.5 inline-flex">
-                      {!p.activo ? <Etiqueta tono="gris">Apagada</Etiqueta> : hoy ? <Etiqueta tono="azul">Sale hoy</Etiqueta> : <Etiqueta tono="naranja">Programada</Etiqueta>}
+                    <span className="mt-1.5 inline-flex text-xs">
+                      {!p.activo ? <Etiqueta tono="gris">Pausada</Etiqueta> : hoy ? <Etiqueta tono="azul">Sale hoy</Etiqueta> : <Etiqueta tono="naranja">Programada</Etiqueta>}
                     </span>
                   </span>
+                  <Pencil className="h-4 w-4 text-muted-foreground shrink-0" />
                 </button>
+                {porBorrar === p.id ? (
+                  <div role="alert" className="border-t border-destructive/30 bg-destructive/5 p-3 flex items-center gap-2">
+                    <span className="flex-1 text-sm font-semibold text-destructive">¿Borrar esta promo para siempre?</span>
+                    <button onClick={() => setPorBorrar(null)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-muted-foreground">
+                      No
+                    </button>
+                    <button
+                      onClick={() => quitar(p)}
+                      disabled={ocupado}
+                      className="h-10 px-3 rounded-xl bg-destructive text-white font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Sí, borrar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border-t border-border px-3 py-2 flex items-center gap-2">
+                    <InterruptorCompacto
+                      activo={p.activo}
+                      ocupado={ocupado}
+                      onCambiar={(v) => pausar(p, v)}
+                      encendido="Activa"
+                      apagado="Pausada"
+                    />
+                    <span className="flex-1" />
+                    <button
+                      onClick={() => setPorBorrar(p.id)}
+                      aria-label={`Borrar promo ${p.titulo}`}
+                      className="h-10 px-3 rounded-xl border-2 border-border text-destructive font-semibold inline-flex items-center gap-1.5"
+                    >
+                      <Trash2 className="h-4 w-4" /> Borrar
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}
@@ -761,6 +839,7 @@ function PestanaPromos({ datos, clave, ejecutar }: PropsPestana) {
         promo={editando}
         clave={clave}
         productos={datos.productos}
+        categorias={datos.categorias}
         onCerrar={() => setEditando(null)}
         onGuardar={async (p) => {
           const ok = await ejecutar(guardarPromo(clave, p), "Promo guardada");
@@ -785,6 +864,7 @@ function EditorPromo({
   promo,
   clave,
   productos,
+  categorias,
   onCerrar,
   onGuardar,
   onBorrar,
@@ -792,6 +872,7 @@ function EditorPromo({
   promo: Promo | null;
   clave: string;
   productos: Product[];
+  categorias: Category[];
   onCerrar: () => void;
   onGuardar: (p: Promo) => Promise<void>;
   onBorrar: (p: Promo) => Promise<void>;
@@ -834,6 +915,8 @@ function EditorPromo({
           }}
           className="space-y-4"
         >
+          <EstadoPromo p={p} onCambiar={(activo) => cambiar({ activo })} />
+
           <div className="flex gap-3 items-start">
             <div className="relative w-32 aspect-[3/4] shrink-0 rounded-xl overflow-hidden bg-muted border border-border flex items-center justify-center">
               {p.imagen ? <img src={p.imagen} alt="" className="w-full h-full object-cover" /> : <Camera className="h-8 w-8 text-muted-foreground" />}
@@ -854,19 +937,89 @@ function EditorPromo({
           <Campo etiqueta="Título (interno)" ayuda="Para reconocerla en el panel; no se muestra al cliente.">
             <input className={INPUT} value={p.titulo} onChange={(e) => cambiar({ titulo: e.target.value })} placeholder="Martes 2x1" maxLength={60} />
           </Campo>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Campo etiqueta="Producto que lleva" ayuda="El botón lo agrega al pedido. Sin producto, solo cierra.">
-              <select className={INPUT} value={p.producto_id ?? ""} onChange={(e) => cambiar({ producto_id: e.target.value || null })}>
-                <option value="">Ninguno</option>
-                {productos.map((x) => (
-                  <option key={x.id} value={x.id}>{x.nombre} · {formatCOP(x.precio)}</option>
-                ))}
-              </select>
-            </Campo>
-            <Campo etiqueta="Texto del botón">
-              <input className={INPUT} value={p.boton_texto} onChange={(e) => cambiar({ boton_texto: e.target.value })} maxLength={30} />
-            </Campo>
+          <div className="space-y-1.5">
+            <span className="text-sm font-semibold">Producto que lleva</span>
+            <SelectorProducto
+              productos={productos}
+              categorias={categorias}
+              valor={p.producto_id}
+              onCambiar={(id) => cambiar({ producto_id: id })}
+            />
+            <p className="text-xs text-muted-foreground">El botón lo agrega al pedido. Sin producto, el botón solo cierra.</p>
           </div>
+          <Campo etiqueta="Texto del botón">
+            <input className={INPUT} value={p.boton_texto} onChange={(e) => cambiar({ boton_texto: e.target.value })} maxLength={30} />
+          </Campo>
+
+          <div className="rounded-2xl border border-border p-3 space-y-4">
+            <p className="font-display font-bold text-primary">¿Cuándo sale?</p>
+            <div className="space-y-2">
+              <span className="text-sm font-semibold">Cada cuánto la ve un cliente</span>
+              <div className="grid grid-cols-1 gap-2" role="radiogroup" aria-label="Frecuencia">
+                {FRECUENCIAS.map((f) => {
+                  const activo = (p.frecuencia ?? "dia") === f.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={activo}
+                      onClick={() => cambiar({ frecuencia: f.id })}
+                      className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2 text-left transition ${activo ? "border-primary bg-primary/5" : "border-border"}`}
+                    >
+                      <span className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center ${activo ? "border-primary" : "border-muted-foreground/40"}`}>
+                        {activo && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold">{f.texto}</span>
+                        <span className="block text-xs text-muted-foreground">{f.detalle}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-sm font-semibold">Momento del día</span>
+              <div className="grid grid-cols-2 gap-2">
+                {MOMENTOS.map((m) => {
+                  const activo = (p.hora_desde ?? null) === m.desde && (p.hora_hasta ?? null) === m.hasta;
+                  return (
+                    <button
+                      key={m.texto}
+                      type="button"
+                      aria-pressed={activo}
+                      onClick={() => cambiar({ hora_desde: m.desde, hora_hasta: m.hasta })}
+                      className={`rounded-xl border-2 px-3 py-2 text-left transition ${activo ? "border-primary bg-primary/5" : "border-border"}`}
+                    >
+                      <span className="block text-sm font-semibold">{m.texto}</span>
+                      <span className="block text-xs text-muted-foreground">{m.detalle}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-xs font-semibold text-muted-foreground">
+                  O desde
+                  <input
+                    type="time"
+                    className={`${INPUT} mt-1`}
+                    value={p.hora_desde ?? ""}
+                    onChange={(e) => cambiar({ hora_desde: e.target.value || null, hora_hasta: p.hora_hasta ?? (e.target.value ? "23:00" : null) })}
+                  />
+                </label>
+                <label className="text-xs font-semibold text-muted-foreground">
+                  hasta
+                  <input
+                    type="time"
+                    className={`${INPUT} mt-1`}
+                    value={p.hora_hasta ?? ""}
+                    onChange={(e) => cambiar({ hora_hasta: e.target.value || null, hora_desde: p.hora_desde ?? (e.target.value ? "05:00" : null) })}
+                  />
+                </label>
+              </div>
+            </div>
 
           <div className="space-y-2">
             <span className="text-sm font-semibold">Días en que sale</span>
@@ -881,7 +1034,7 @@ function EditorPromo({
               <input type="date" className={INPUT} value={p.hasta ?? ""} onChange={(e) => cambiar({ hasta: e.target.value || null })} />
             </Campo>
           </div>
-          <Interruptor activo={p.activo} onCambiar={(v) => cambiar({ activo: v })} titulo="Encendida" detalle="Apágala para pausarla sin borrarla." />
+          </div>
 
           <div className="flex items-center gap-2 pt-2">
             {promo?.titulo !== undefined && (confirmarBorrar ? (
@@ -896,7 +1049,7 @@ function EditorPromo({
               disabled={guardando || subiendo || !p.imagen}
               className="flex-1 h-12 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40 flex items-center justify-center gap-2"
             >
-              {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {p.imagen ? "Guardar promo" : "Sube una imagen para guardar"}
+              {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {!p.imagen ? "Sube una imagen para guardar" : p.activo ? "Guardar promo" : "Guardar (pausada)"}
             </button>
           </div>
         </form>
@@ -1937,6 +2090,170 @@ function Campo({ etiqueta, ayuda, children }: { etiqueta: string; ayuda?: string
       {children}
       {ayuda && <span className="block text-xs text-muted-foreground">{ayuda}</span>}
     </label>
+  );
+}
+
+// Interruptor pequeño para listas (mismo diseño que Interruptor)
+function InterruptorCompacto({
+  activo,
+  onCambiar,
+  encendido,
+  apagado,
+  ocupado = false,
+}: {
+  activo: boolean;
+  onCambiar: (v: boolean) => void;
+  encendido: string;
+  apagado: string;
+  ocupado?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={activo}
+      disabled={ocupado}
+      onClick={() => onCambiar(!activo)}
+      className="h-10 inline-flex items-center gap-2 rounded-xl px-2 hover:bg-muted/50 disabled:opacity-60"
+    >
+      <span className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${activo ? "bg-[#1F9D4C]" : "bg-muted-foreground/30"}`}>
+        <span className={`block h-5 w-5 rounded-full bg-white shadow transition ${activo ? "translate-x-5" : ""}`} />
+      </span>
+      <span className={`text-sm font-semibold ${activo ? "text-[#14652F]" : "text-muted-foreground"}`}>
+        {activo ? encendido : apagado}
+      </span>
+    </button>
+  );
+}
+
+// Estado de la promo, arriba y grande: se ve de un vistazo si está saliendo
+function EstadoPromo({ p, onCambiar }: { p: Promo; onCambiar: (v: boolean) => void }) {
+  const hoy = promoVigente(p);
+  const detalle = !p.activo
+    ? "Ningún cliente la ve. Actívala cuando quieras."
+    : !p.imagen
+      ? "Sube una imagen para que empiece a salir."
+      : hoy
+        ? `Los clientes la ven hoy · ${resumenPromo(p)}`
+        : `Programada · ${resumenPromo(p)}`;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={p.activo}
+      onClick={() => onCambiar(!p.activo)}
+      className={`w-full flex items-center gap-3 rounded-2xl p-4 text-left border-2 transition ${
+        p.activo ? "bg-[#DDF5E4] border-[#1F9D4C]/40" : "bg-muted border-border"
+      }`}
+    >
+      <span className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center ${p.activo ? "bg-[#1F9D4C] text-white" : "bg-muted-foreground/20 text-muted-foreground"}`}>
+        {p.activo ? <Megaphone className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className={`block font-display font-bold text-lg leading-tight ${p.activo ? "text-[#14652F]" : "text-muted-foreground"}`}>
+          {p.activo ? "Promo activa" : "Promo pausada"}
+        </span>
+        <span className="block text-xs text-muted-foreground">{detalle}</span>
+      </span>
+      <span className={`h-8 w-14 shrink-0 rounded-full p-1 transition ${p.activo ? "bg-[#1F9D4C]" : "bg-muted-foreground/30"}`}>
+        <span className={`block h-6 w-6 rounded-full bg-white shadow transition ${p.activo ? "translate-x-6" : ""}`} />
+      </span>
+    </button>
+  );
+}
+
+// Elegir producto: buscador con lupa + filtro por categoría
+function SelectorProducto({
+  productos,
+  categorias,
+  valor,
+  onCambiar,
+}: {
+  productos: Product[];
+  categorias: Category[];
+  valor: string | null;
+  onCambiar: (id: string | null) => void;
+}) {
+  const [buscar, setBuscar] = useState("");
+  const [cat, setCat] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState(!valor);
+  const elegido = productos.find((x) => x.id === valor) ?? null;
+  const sinTildes = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const q = sinTildes(buscar.trim());
+  const lista = productos.filter((x) => (!cat || x.categoriaId === cat) && (!q || sinTildes(x.nombre).includes(q)));
+  const conProductos = categorias.filter((c) => productos.some((x) => x.categoriaId === c.id));
+
+  if (!abierto) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border-2 border-primary bg-primary/5 p-2">
+        <span className="h-12 w-12 shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+          {elegido?.foto ? <img src={elegido.foto} alt="" className="w-full h-full object-cover" /> : <Package className="h-5 w-5 text-muted-foreground" />}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block font-semibold truncate">{elegido ? elegido.nombre : "Ninguno"}</span>
+          <span className="block text-xs text-muted-foreground">{elegido ? formatCOP(elegido.precio) : "El botón solo cierra la promo"}</span>
+        </span>
+        <button type="button" onClick={() => setAbierto(true)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-primary shrink-0">
+          Cambiar
+        </button>
+      </div>
+    );
+  }
+  const elegir = (id: string | null) => {
+    onCambiar(id);
+    setAbierto(false);
+    setBuscar("");
+  };
+  return (
+    <div className="rounded-xl border-2 border-border p-2 space-y-2">
+      <div className="relative">
+        <Search className="h-5 w-5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          className={`${INPUT} pl-10`}
+          value={buscar}
+          onChange={(e) => setBuscar(e.target.value)}
+          placeholder="Busca el producto"
+          aria-label="Buscar producto"
+        />
+      </div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+        {[{ id: null as string | null, nombre: "Todos" }, ...conProductos].map((c) => (
+          <button
+            key={c.id ?? "todos"}
+            type="button"
+            aria-pressed={cat === c.id}
+            onClick={() => setCat(c.id)}
+            className={`h-8 px-3 rounded-full text-xs font-semibold border whitespace-nowrap shrink-0 ${cat === c.id ? "bg-primary text-primary-foreground border-primary" : "border-border"}`}
+          >
+            {c.nombre}
+          </button>
+        ))}
+      </div>
+      <ul className="max-h-56 overflow-y-auto space-y-1">
+        <li>
+          <button type="button" onClick={() => elegir(null)} className={`w-full flex items-center gap-3 rounded-lg p-2 text-left hover:bg-muted ${!valor ? "bg-primary/5" : ""}`}>
+            <span className="h-10 w-10 shrink-0 rounded-lg bg-muted flex items-center justify-center"><X className="h-4 w-4 text-muted-foreground" /></span>
+            <span className="flex-1 text-sm font-semibold">Ninguno</span>
+            {!valor && <Check className="h-5 w-5 text-primary" />}
+          </button>
+        </li>
+        {lista.map((x) => (
+          <li key={x.id}>
+            <button type="button" onClick={() => elegir(x.id)} className={`w-full flex items-center gap-3 rounded-lg p-2 text-left hover:bg-muted ${valor === x.id ? "bg-primary/5" : ""}`}>
+              <span className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-muted flex items-center justify-center">
+                {x.foto ? <img src={x.foto} alt="" className="w-full h-full object-cover" /> : <Package className="h-4 w-4 text-muted-foreground" />}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold truncate">{x.nombre}</span>
+                <span className="block text-xs text-muted-foreground">{formatCOP(x.precio)}</span>
+              </span>
+              {valor === x.id && <Check className="h-5 w-5 text-primary" />}
+            </button>
+          </li>
+        ))}
+        {lista.length === 0 && <li className="text-center text-sm text-muted-foreground py-4">No hay productos con “{buscar}”.</li>}
+      </ul>
+    </div>
   );
 }
 

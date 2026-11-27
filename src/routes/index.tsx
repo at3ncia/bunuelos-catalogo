@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { listarSedes, disponibilidadSede, SEDES_RESPALDO, nombreCorto, etiquetaSede, esPorCiudad, listarPuntos, PUNTOS_RESPALDO, type Sede, type PuntoPedido } from "@/lib/sedes";
 import { MapPin, ChevronDown, Instagram, X, Search } from "lucide-react";
-import { fechaColombia, listarBarrios, listarPromos, promoVigente, registrarPedido, type Barrio, type Promo } from "@/lib/negocio";
+import { fechaColombia, listarBarrios, listarPromos, promoEnHorario, promoVigente, registrarPedido, type Barrio, type Promo } from "@/lib/negocio";
 import { useAppState } from "@/lib/app-store";
 import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
@@ -87,7 +87,16 @@ function CatalogPage() {
       return {};
     }
   });
+  // Promos ya vistas en esta visita (para las de frecuencia "cada vez que entran")
+  const [vistasVisita, setVistasVisita] = useState<string[]>([]);
+  const yaVista = (p: Promo, base: Date) => {
+    if (vistasVisita.includes(p.id)) return true;
+    if (p.frecuencia === "visita") return false;
+    if (p.frecuencia === "una_vez") return !!promosVistas[p.id];
+    return promosVistas[p.id] === fechaColombia(base);
+  };
   const marcarPromoVista = (id: string) => {
+    setVistasVisita((l) => [...l, id]);
     const v = { ...promosVistas, [id]: fechaColombia() };
     setPromosVistas(v);
     try {
@@ -385,10 +394,10 @@ function CatalogPage() {
         />
       )}
 
-      {/* Pop-up de promoción (programado desde /admin → Promos); una vez al día por promo */}
+      {/* Pop-up de promoción (programado desde /admin → Promos); con la frecuencia y horario de cada promo */}
       {(() => {
         if (!sedeId || selectorAbierto || faltaPunto || checkoutOpen || cartOpen || selected) return null;
-        const promo = promos.find((p) => promoVigente(p, ahora) && promosVistas[p.id] !== fechaColombia(ahora));
+        const promo = promos.find((p) => promoVigente(p, ahora) && promoEnHorario(p, ahora) && !yaVista(p, ahora));
         if (!promo) return null;
         const producto = state.productos.find(
           (x) => x.id === promo.producto_id && x.disponible && (dispSede[x.id] ?? true) && visibleHoy(x.dias, ahora),
