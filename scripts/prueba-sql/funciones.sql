@@ -46,5 +46,29 @@ begin
   assert (select bool_and((x->>'sede_id')::int = 1) from json_array_elements(r->'pedidos') x), 'la sede ve pedidos de otra';
   r := sede_listar_pedidos_rango(1, 'mala', current_date - 1, current_date + 1);
   assert not (r->>'ok')::boolean, 'sede con clave mala debería fallar';
-  raise notice '✓ Funciones 011–014 OK';
+  -- 015: teléfono limpio, autorización, clientes, borrar cliente y métricas
+  r := registrar_pedido('{"sede_id":1,"cliente":{"Nombre completo":"Luz","Número de contacto":"+57 300 111 2233"},"items":[{"id":"p1","cantidad":3}],"acepta_promos":true}');
+  assert (select telefono = '3001112233' and acepta_promos and origen = 'web' from pedidos where codigo = r->>'codigo'), 'teléfono o autorización mal guardados';
+  update pedidos set estado = 'confirmado' where codigo = r->>'codigo';
+  r := registrar_pedido('{"sede_id":1,"cliente":{"Nombre completo":"Luz","Celular":"300-111-2233"},"items":[{"id":"p1","cantidad":1}]}');
+  update pedidos set estado = 'confirmado' where codigo = r->>'codigo';
+  r := admin_clientes('Admin123');
+  assert (select (c->>'compras')::int = 2 and (c->>'gastado')::int = 14000 and c->>'nombre' = 'Luz' and c->>'favorito' = 'Buñuelo'
+            from json_array_elements(r->'clientes') c where c->>'telefono' = '3001112233'), 'admin_clientes: ' || r::text;
+  r := admin_cliente('Admin123', '300 111 2233');
+  assert json_array_length(r->'pedidos') = 2, 'admin_cliente debería traer 2 pedidos';
+  r := admin_metricas('Admin123', current_date - 6, current_date);
+  assert (r->>'ok')::boolean, 'metricas: ' || r::text;
+  assert json_array_length(r->'serie') = 7, 'la serie de 7 días debe tener 7 puntos: ' || (r->'serie')::text;
+  assert (r->'resumen'->>'ventas')::int >= 14000, 'ventas del periodo';
+  r := admin_metricas('Admin123', current_date - 365 * 3, current_date);
+  assert r->>'paso' = 'month' and json_array_length(r->'serie') between 36 and 38, 'serie de 3 años por mes: ' || (r->>'paso');
+  r := admin_metricas('Admin123', current_date + 10, current_date + 20);
+  assert (r->'resumen'->>'ventas')::int = 0 and json_array_length(r->'serie') = 11, 'periodo sin ventas debe venir en ceros';
+  r := admin_metricas('Admin123', current_date, current_date - 1);
+  assert not (r->>'ok')::boolean, 'fechas al revés deberían fallar';
+  r := admin_borrar_cliente('Admin123', '3001112233');
+  assert not exists (select 1 from pedidos where telefono = '3001112233'), 'el cliente no se borró';
+  assert exists (select 1 from pedidos where estado = 'confirmado' and total = 10500 and cliente = '{}'), 'la venta debía quedar sin datos personales';
+  raise notice '✓ Funciones 011–015 OK';
 end $$;

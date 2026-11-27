@@ -18,6 +18,8 @@ import {
   Bike,
   ClipboardList,
   Megaphone,
+  BarChart3,
+  Users,
   GripVertical,
   ChevronDown,
   ListPlus,
@@ -68,6 +70,8 @@ import {
 import { colorCategoria, FotoProducto } from "@/components/foto-producto";
 import { subirFoto } from "@/lib/fotos";
 import { ListaPedidos } from "@/components/lista-pedidos";
+import { Resumen } from "@/components/resumen";
+import { Clientes } from "@/components/clientes";
 import { ESTILOS_LINK, ICONOS_LINK, LinksVista, type PiezaLinks } from "@/components/links-vista";
 import { AjustesVista, ICONOS_TIPO, type PantallaAjustes, type PiezaAjustes } from "@/components/ajustes-vista";
 import {
@@ -102,7 +106,7 @@ export const Route = createFileRoute("/admin")({
 // La sesión del dueño dura mientras la pestaña esté abierta
 const CLAVE_SESION = "sesionAdmin";
 
-type Pestana = "pedidos" | "productos" | "promos" | "domicilios" | "categorias" | "whatsapp" | "ajustes" | "seguridad";
+type Pestana = "resumen" | "clientes" | "pedidos" | "productos" | "promos" | "domicilios" | "categorias" | "whatsapp" | "ajustes" | "seguridad";
 type Aviso = { tipo: "ok" | "err"; texto: string } | null;
 
 const INPUT =
@@ -242,7 +246,7 @@ function Panel({
   onClaveCambiada: (c: string) => void;
   onSalir: () => void;
 }) {
-  const [pestana, setPestana] = useState<Pestana>("pedidos");
+  const [pestana, setPestana] = useState<Pestana>("resumen");
   const [datos, setDatos] = useState<DatosPanel | null>(null);
   const [errorCarga, setErrorCarga] = useState("");
   const [aviso, setAviso] = useState<Aviso>(null);
@@ -279,7 +283,9 @@ function Panel({
   };
 
   const pestanas: [Pestana, string, typeof Store][] = [
+    ["resumen", "Resumen", BarChart3],
     ["pedidos", "Pedidos", ClipboardList],
+    ["clientes", "Clientes", Users],
     ["productos", "Productos", Store],
     ["promos", "Promos", Megaphone],
     ["domicilios", "Domicilios", Bike],
@@ -291,7 +297,7 @@ function Panel({
 
   return (
     <div className="space-y-4">
-      <nav className="bg-card border border-border rounded-2xl shadow-card p-1.5 grid grid-cols-4 gap-1">
+      <nav className="bg-card border border-border rounded-2xl shadow-card p-1.5 grid grid-cols-5 gap-1">
         {pestanas.map(([id, texto, Icono]) => (
           <button
             key={id}
@@ -319,6 +325,10 @@ function Panel({
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         )
+      ) : pestana === "resumen" ? (
+        <Resumen clave={clave} sedes={datos.sedes} />
+      ) : pestana === "clientes" ? (
+        <Clientes clave={clave} sedes={datos.sedes} />
       ) : pestana === "pedidos" ? (
         <ListaPedidos
           sedes={datos.sedes}

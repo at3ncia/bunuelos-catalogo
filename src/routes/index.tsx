@@ -762,6 +762,8 @@ function CheckoutModal({
   };
   const [valores, setValores] = useState<Record<string, string>>(conGuardados);
   const [hayGuardados, setHayGuardados] = useState(() => !!leerLocal(DATOS_CLIENTE));
+  // Autorización de promociones (Ley 1581): opcional, sin marcar por defecto; se recuerda en este celular
+  const [aceptaPromos, setAceptaPromos] = useState(() => leerLocal<boolean>(ACEPTA_PROMOS) === true);
   // Si cambian los campos (se recargó el menú), se completan los que falten
   useEffect(() => {
     setValores((v) => ({ ...iniciales(), ...v }));
@@ -803,6 +805,7 @@ function CheckoutModal({
       items: items.map((i) => ({ id: i.product.id, cantidad: i.cantidad })),
       barrio_id: barrio?.id ?? null,
       barrio_texto: barrio ? null : textoOtro.trim() || null,
+      acepta_promos: aceptaPromos,
     });
     const detalle = items
       .map((i) => `   - ${i.cantidad}x ${i.product.nombre} (${formatCOP(i.product.precio * i.cantidad)})`)
@@ -814,6 +817,7 @@ function CheckoutModal({
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     // Recordar para el próximo pedido (solo en este celular)
     guardarLocal(DATOS_CLIENTE, valores);
+    guardarLocal(ACEPTA_PROMOS, aceptaPromos);
     guardarLocal(ULTIMO_PEDIDO, { items: items.map((i) => ({ id: i.product.id, cantidad: i.cantidad })), fecha: Date.now() });
     setHayGuardados(true);
     if (ventana) ventana.location.href = url;
@@ -933,6 +937,21 @@ function CheckoutModal({
               </div>
             </dl>
           )}
+          <label className="flex items-start gap-3 rounded-xl border border-border p-3 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={aceptaPromos}
+              onChange={(e) => setAceptaPromos(e.target.checked)}
+              className="mt-0.5 h-5 w-5 shrink-0 accent-[#0E47D6]"
+            />
+            <span className="text-muted-foreground">
+              Quiero recibir promociones por WhatsApp y acepto la{" "}
+              <a href="/politica-de-privacidad-y-uso-de-datos" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary underline">
+                política de datos
+              </a>
+              . <span className="opacity-80">(Opcional: tu pedido sale igual.)</span>
+            </span>
+          </label>
           <Button
             onClick={enviar}
             disabled={faltan.length > 0 || enviando}
@@ -1278,6 +1297,7 @@ function BuscadorBarrio({
 
 // ── Recordar datos en este celular (nunca se envían a otro lado) ──
 const DATOS_CLIENTE = "datosCliente_v1";
+const ACEPTA_PROMOS = "aceptaPromos_v1";
 const ULTIMO_PEDIDO = "ultimoPedido_v1";
 function leerLocal<T>(clave: string): T | null {
   try {

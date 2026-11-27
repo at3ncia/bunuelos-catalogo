@@ -40,6 +40,13 @@ export type Pedido = {
   confirmado_por: string | null;
   pago_proveedor: string | null;
   creado_en: string;
+  // sql/015 (pueden faltar si aún no se ejecuta)
+  telefono?: string | null;
+  acepta_promos?: boolean;
+  origen?: "web" | "ia" | "asesor";
+  metodo_pago?: string | null;
+  comprobante?: boolean;
+  conversacion_url?: string | null;
 };
 
 // ── Lectura pública (con respaldo de la última carga buena) ─────────────────
@@ -96,6 +103,7 @@ export type DatosPedido = {
   items: { id: string; cantidad: number }[];
   barrio_id: string | null;
   barrio_texto: string | null;
+  acepta_promos?: boolean;
 };
 
 // Registra el pedido; si falla o tarda, el pedido igual sale por WhatsApp (sin código)
@@ -175,3 +183,52 @@ export const borrarBarrio = (clave: string, id: string) => rpcAdmin("admin_borra
 export const listarPromosAdmin = (clave: string) => rpcAdmin<{ promos?: Promo[] }>("admin_listar_promos", { p_clave: clave });
 export const guardarPromo = (clave: string, p: Promo) => rpcAdmin("admin_guardar_promo", { p_clave: clave, p });
 export const borrarPromo = (clave: string, id: string) => rpcAdmin("admin_borrar_promo", { p_clave: clave, p_id: id });
+
+// ── Clientes y métricas (sql/015) ───────────────────────────────────────────
+
+export type Cliente = {
+  telefono: string;
+  nombre: string;
+  barrio: string | null;
+  sede_id: number | null;
+  compras: number; // pedidos confirmados
+  pedidos: number;
+  gastado: number;
+  primero: string;
+  ultimo: string;
+  acepta_promos: boolean;
+  via_ia: boolean;
+  favorito: string | null;
+};
+
+export type Metricas = {
+  paso: "day" | "week" | "month";
+  dias: number;
+  resumen: {
+    ventas: number; confirmados: number; pedidos: number; cancelados: number;
+    ventas_ant: number; confirmados_ant: number; pedidos_ant: number;
+    ventas_ia: number; confirmados_ia: number; ia_por_revisar: number;
+  };
+  serie: { fecha: string; ventas: number; pedidos: number }[];
+  calor: { dia: number; hora: number; pedidos: number }[];
+  productos: { nombre: string; cantidad: number; ventas: number }[];
+  productos_menos: { nombre: string; cantidad: number }[];
+  barrios: { barrio: string; pedidos: number; ventas: number }[];
+  sedes: { sede_id: number; pedidos: number; ventas: number }[];
+  clientes: { total: number; nuevos: number } | null;
+  recompra: { base: number; volvieron: number } | null;
+};
+
+const FALTA_015 = "015_clientes_metricas";
+async function rpcNegocio<T>(nombre: string, args: Record<string, unknown>): Promise<{ ok: boolean; error?: string } & Partial<T>> {
+  const { data, error } = await supabase.rpc(nombre, args);
+  if (error) return { ok: false, error: traducir(error.message, FALTA_015) } as { ok: boolean; error?: string } & Partial<T>;
+  return data as { ok: boolean; error?: string } & Partial<T>;
+}
+export const listarClientes = (clave: string) => rpcNegocio<{ clientes: Cliente[] }>("admin_clientes", { p_clave: clave });
+export const pedidosDeCliente = (clave: string, telefono: string) =>
+  rpcNegocio<{ pedidos: Pedido[] }>("admin_cliente", { p_clave: clave, p_telefono: telefono });
+export const borrarCliente = (clave: string, telefono: string) =>
+  rpcNegocio<{ pedidos: number }>("admin_borrar_cliente", { p_clave: clave, p_telefono: telefono });
+export const leerMetricas = (clave: string, desde: string, hasta: string, sede: number | null) =>
+  rpcNegocio<Metricas>("admin_metricas", { p_clave: clave, p_desde: desde, p_hasta: hasta, p_sede: sede });

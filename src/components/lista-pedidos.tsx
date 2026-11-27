@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, ChevronDown, Loader2, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
+import { Bot, CalendarDays, Check, ChevronDown, Loader2, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { formatCOP } from "@/lib/cart";
 import type { EstadoPedido, Pedido } from "@/lib/negocio";
 import type { Sede } from "@/lib/sedes";
@@ -55,6 +55,7 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes, cargarRango, borrar
   const [hasta, setHasta] = useState(hoyCol);
   const [porBorrar, setPorBorrar] = useState<number | null>(null);
   const [filtro, setFiltro] = useState<EstadoPedido | "todos">("todos");
+  const [soloIA, setSoloIA] = useState(false);
   const [pedidos, setPedidos] = useState<Pedido[] | null>(null);
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
@@ -84,8 +85,8 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes, cargarRango, borrar
   }, [dias, desde, hasta]);
 
   const visibles = useMemo(
-    () => (pedidos ?? []).filter((p) => filtro === "todos" || p.estado === filtro),
-    [pedidos, filtro],
+    () => (pedidos ?? []).filter((p) => (filtro === "todos" || p.estado === filtro) && (!soloIA || p.origen === "ia")),
+    [pedidos, filtro, soloIA],
   );
   const conteo = (e: EstadoPedido) => (pedidos ?? []).filter((p) => p.estado === e).length;
   const ventas = (pedidos ?? []).filter((p) => p.estado === "confirmado").reduce((s, p) => s + p.total, 0);
@@ -178,6 +179,31 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes, cargarRango, borrar
         <Resumen valor={formatCOP(ventas)} texto="Ventas confirmadas" tono="bg-primary/10 text-primary" activo={false} onClick={() => setFiltro("todos")} />
       </div>
 
+      {(() => {
+        const ia = (pedidos ?? []).filter((p) => p.origen === "ia");
+        if (!ia.length) return null;
+        const porRevisar = ia.filter((p) => p.estado === "pendiente").length;
+        return (
+          <button
+            onClick={() => setSoloIA((v) => !v)}
+            aria-pressed={soloIA}
+            className={`w-full flex items-center gap-3 rounded-2xl border-2 p-3 text-left transition ${soloIA ? "border-[#2563EB] bg-[#2563EB]/10" : "border-[#2563EB]/30 bg-card"}`}
+          >
+            <span className="brillo-ia h-10 w-10 shrink-0 rounded-xl bg-[#2563EB] text-white flex items-center justify-center">
+              <Bot className="h-5 w-5" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block font-semibold text-[#1D4ED8]">
+                {ia.length} venta{ia.length === 1 ? "" : "s"} de la IA
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {porRevisar ? `${porRevisar} por revisar si llegó el pago` : "Todas revisadas"} · {soloIA ? "toca para ver todos" : "toca para ver solo estas"}
+              </span>
+            </span>
+          </button>
+        );
+      })()}
+
       {error && <p role="alert" className="rounded-xl bg-destructive/10 text-destructive text-sm px-4 py-3">{error}</p>}
 
       {pedidos === null ? (
@@ -206,6 +232,11 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes, cargarRango, borrar
                     <span className="flex items-center gap-2">
                       <span className="font-display font-bold text-primary">#{p.codigo}</span>
                       <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${ESTILO_ESTADO[p.estado]}`}>{NOMBRE_ESTADO[p.estado]}</span>
+                      {p.origen === "ia" && (
+                        <span className="brillo-ia inline-flex items-center gap-1 rounded-full bg-[#2563EB] px-2 py-0.5 text-xs font-bold text-white" title="Venta hecha por la IA de WhatsApp">
+                          <Bot className="h-3.5 w-3.5" /> IA
+                        </span>
+                      )}
                     </span>
                     <span className="block text-sm truncate">{nombre}</span>
                     <span className="block text-xs text-muted-foreground">
@@ -239,6 +270,33 @@ export function ListaPedidos({ cargar, cambiarEstado, sedes, cargarRango, borrar
                         </div>
                       ))}
                     </dl>
+                    {p.origen === "ia" && p.estado === "pendiente" && (
+                      <div className="rounded-xl border-2 border-[#2563EB]/40 bg-[#2563EB]/5 p-3 space-y-1">
+                        <p className="font-semibold text-[#1D4ED8] flex items-center gap-1.5">
+                          <Bot className="h-4 w-4" /> Venta de la IA: revisa que llegó el pago
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {p.metodo_pago === "link"
+                            ? "Pago por link: se confirma solo cuando el cliente paga."
+                            : p.metodo_pago === "efectivo"
+                              ? "Paga en efectivo al recibir. Confírmalo cuando salga el domicilio."
+                              : p.comprobante
+                                ? "El cliente envió comprobante. Verifica en Nequi/Bancolombia y toca Confirmar venta."
+                                : "Transferencia sin comprobante todavía."}
+                        </p>
+                        {p.conversacion_url && (
+                          <a href={p.conversacion_url} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-semibold text-[#1D4ED8] underline">
+                            Ver la conversación
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {p.metodo_pago && (
+                      <p className="text-xs text-muted-foreground">
+                        Pago: {({ efectivo: "Efectivo", transferencia: "Transferencia", link: "Link de pago" } as Record<string, string>)[p.metodo_pago] ?? p.metodo_pago}
+                        {p.comprobante ? " · comprobante recibido" : ""}
+                      </p>
+                    )}
                     {p.confirmado_por && p.estado === "confirmado" && (
                       <p className="text-xs text-muted-foreground">Confirmado por: {p.confirmado_por}</p>
                     )}

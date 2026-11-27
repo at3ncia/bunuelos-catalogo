@@ -13,6 +13,11 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 
 ## Qué se cambia desde `/admin` (sin pedir cambios de código)
 
+- **Resumen:** ventas confirmadas, pedidos, ticket promedio, tasa de confirmación, clientes que vuelven y ventas de la IA, siempre comparados con el periodo anterior. Gráficas de ventas (por día, semana o mes según el periodo), días y horas con más pedidos, más y menos vendidos, barrios y ventas por sede. Periodos: hoy, 7 y 30 días, este mes, mes pasado, años y fechas propias; por sede.
+- **Clientes:** un cliente = un teléfono. Buscador y fichas (Dormidos, Frecuentes, Nuevos, Top, solo los que aceptaron promociones). Ficha con historial, favorito, cada cuánto pide y botón de WhatsApp con mensaje listo (gratis, sin APIs). **Borrar datos del cliente** cuando lo pida (Ley 1581): se borran sus datos y las ventas quedan sin ellos.
+- **Autorización de promociones:** casilla opcional en el formulario del pedido (sin marcar por defecto). Solo a quienes la marcan se les debe escribir con promociones.
+- **Ventas de la IA:** en Pedidos (admin y sedes) llevan el distintivo azul **🤖 IA**; las pendientes piden revisar que llegó el pago.
+
 - **Pedidos:** cada pedido enviado desde el catálogo queda registrado con su código (ej. `CAR-04821`, también va en el mensaje de WhatsApp), todos los datos del formulario, barrio y domicilio. Se confirman o cancelan a mano aquí o en `/sede`. Resumen de ventas confirmadas de hoy, 7 y 30 días, o **Fechas** (este mes, mes pasado, este año, año pasado o un rango propio). El dueño puede **borrar** un pedido para siempre (pide confirmación). Los pedidos que siguen **pendientes después de 30 días se borran solos**.
 - **Promos:** ventanas emergentes verticales 3:4 (ideal 1080 × 1440) al abrir el menú. Imagen, producto que lleva (el botón lo agrega al pedido), días de la semana y fechas desde/hasta. Se elige **con qué frecuencia** sale (cada vez que entran, una vez al día o una sola vez por cliente) y **en qué momento** (todo el día, mañana, tarde, noche o un horario propio). Desde la lista se **pausa/activa** o se **borra** sin abrirla.
 - **Domicilios:** precio del domicilio por barrio en Cartagena y Barranquilla. Lista inicial de barrios cargada; "Precio rápido" llena todos los que no tienen precio y luego se ajustan los distintos. También se puede pegar una lista ("Manga, 5000"). Barrio sin precio = "por confirmar". **El cliente nunca ve el precio del domicilio** (para que no elija el barrio más barato): elige su barrio, el mensaje dice "Domicilio: por confirmar" y la sede ve el valor real y el total en Pedidos para responderle.
@@ -62,6 +67,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 13. `sql/012_promos_frecuencia.sql` — promos: frecuencia (cada visita / una vez al día / una sola vez) y franja de horas
 14. `sql/013_reiniciar_agotados.sql` — botón "Reiniciar" de agotados por sede en Ajustes
 15. `sql/014_pedidos_fechas_sede.sql` — los encargados ven sus pedidos por fechas en `/sede` (solo lectura)
+16. `sql/015_clientes_metricas.sql` — Clientes, Resumen (métricas), autorización de promociones y base para ventas de la IA
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 
