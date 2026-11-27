@@ -23,7 +23,7 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 - **Categorías:** nombre, orden (arrastrando desde los 6 puntos o con las flechas) y color. Botón **Productos** para pasar varios productos a la categoría de una vez (buscador y filtro). El texto encima del color se ajusta solo para que se lea.
 - **Links:** editor con **vista previa en vivo** (al lado en PC; pestaña "Vista previa" en el celular; tocar un botón de la vista previa abre su editor). La página `/links` completa: texto bajo el logo, botón dorado del menú (texto y mostrar/ocultar), botones extra (Maps, TikTok, apps de domicilio…) y los puntos de WhatsApp (número, mensaje inicial, texto del botón).
 - **Ajustes:** título y subtítulo de la portada e Instagram.
-- **Formulario del pedido** (en Ajustes): qué datos llena el cliente, en qué orden, cuáles son obligatorios, listas de opciones (medios de pago, "¿Domicilio o recoger?") y el saludo del mensaje de WhatsApp.
+- **Ajustes** (con vista previa en vivo de la portada, el formulario y el mensaje que llega por WhatsApp): portada, **formulario del pedido** (qué datos llena el cliente, en qué orden, obligatorios, tipo de respuesta y opciones como fichas: tocar una la deja marcada por defecto, con sugerencias de medios de pago), saludo del mensaje, horario y hora de reinicio.
 - **Horario de domicilios:** días y franjas. Fuera de horario, el catálogo avisa solo cuándo abren. Los **festivos de Colombia se calculan automáticamente** (usan el horario del domingo).
 - **Reinicio diario:** la hora en que todo lo marcado como "Se acabó hoy" vuelve a estar disponible.
 - **Claves:** restablecer la clave de una ciudad (cuando cambia el personal) y cambiar la tuya.

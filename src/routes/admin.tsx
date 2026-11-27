@@ -65,6 +65,7 @@ import { colorCategoria, FotoProducto } from "@/components/foto-producto";
 import { subirFoto } from "@/lib/fotos";
 import { ListaPedidos } from "@/components/lista-pedidos";
 import { ESTILOS_LINK, ICONOS_LINK, LinksVista, type PiezaLinks } from "@/components/links-vista";
+import { AjustesVista, ICONOS_TIPO, type PantallaAjustes, type PiezaAjustes } from "@/components/ajustes-vista";
 import {
   borrarBarrio,
   borrarPromo,
@@ -1701,49 +1702,7 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
 
   return (
     <div className="lg:w-[min(72rem,calc(100vw-3rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2 space-y-4">
-      <div className="sticky top-2 z-30 bg-card border border-border rounded-2xl p-1.5 shadow-card space-y-1.5">
-      <div className="lg:hidden grid grid-cols-2 gap-1">
-        {(
-          [
-            ["editar", "Editar", Pencil],
-            ["ver", "Vista previa", Eye],
-          ] as const
-        ).map(([id, texto, Icono]) => (
-          <button
-            key={id}
-            onClick={() => setVista(id)}
-            aria-pressed={vista === id}
-            className={`h-10 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${vista === id ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
-          >
-            <Icono className="h-4 w-4" /> {texto}
-          </button>
-        ))}
-      </div>
-        <div className={`flex items-center gap-2 rounded-xl pl-3 p-1 ${sinCambios ? "bg-muted/60" : "bg-[#FFF1CC]"}`}>
-          {sinCambios ? (
-            <span className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#14652F]">
-              <Check className="h-4 w-4 shrink-0" /> Todo guardado
-            </span>
-          ) : (
-            <span className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#7A5200]">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-[#D9731B] animate-pulse" /> <span className="truncate"><span className="min-[420px]:hidden">Sin guardar</span><span className="hidden min-[420px]:inline">Cambios sin guardar</span></span>
-            </span>
-          )}
-          {!sinCambios && (
-            <button type="button" onClick={reiniciar} className="h-10 px-3 rounded-lg text-sm font-semibold text-muted-foreground hover:bg-black/5">
-              Descartar
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={guardar}
-            disabled={guardando || sinCambios}
-            className="h-10 px-4 rounded-lg bg-[#D9731B] text-white font-bold inline-flex items-center gap-2 disabled:opacity-40"
-          >
-            {guardando && <Loader2 className="h-4 w-4 animate-spin" />} Guardar
-          </button>
-        </div>
-      </div>
+      <BarraEdicion vista={vista} setVista={setVista} sinCambios={sinCambios} guardando={guardando} onGuardar={guardar} onDescartar={reiniciar} />
 
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start">
         <div className={`space-y-4 min-w-0 ${vista === "ver" ? "hidden lg:block" : ""}`}>
@@ -2005,7 +1964,19 @@ function PestanaWhatsApp({ datos, clave, ejecutar }: PropsPestana) {
 // Celular de la vista previa: la página se dibuja a 360 px de ancho (como un celular real) y se
 // ajusta completa al marco, sin cortes ni barras de desplazamiento; cabe en la pantalla del equipo.
 const ANCHO_CELULAR = 360;
-function PantallaCelular({ children, scrollRef }: { children: React.ReactNode; scrollRef: React.RefObject<HTMLDivElement | null> }) {
+function PantallaCelular({
+  children,
+  scrollRef,
+  fondo = "#0E47D6",
+  recorte = "10rem",
+  recorteMovil = "9rem",
+}: {
+  children: React.ReactNode;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  fondo?: string; // color de fondo de la pantalla
+  recorte?: string; // alto que ocupa lo demás de la página en PC (para que el celular quepa entero)
+  recorteMovil?: string; // lo mismo en celular
+}) {
   const marco = useRef<HTMLDivElement>(null);
   const [medida, setMedida] = useState({ w: ANCHO_CELULAR, h: 740 });
   useEffect(() => {
@@ -2022,9 +1993,10 @@ function PantallaCelular({ children, scrollRef }: { children: React.ReactNode; s
     <div
       // Ancho: el disponible (máx. 380 px) sin pasar del alto de la pantalla.
       // En celular el marco es 9:16 para aprovechar el ancho; en PC, 9:19,5 como un teléfono real.
-      className="mx-auto rounded-[2.4rem] bg-[#0b1530] p-[10px] shadow-2xl ring-1 ring-black/10 w-[min(100%,380px,calc((100dvh_-_8rem)*0.5625))] lg:w-[min(100%,380px,calc((100dvh_-_10rem)*0.4615))]"
+      className="mx-auto rounded-[2.4rem] bg-[#0b1530] p-[10px] shadow-2xl ring-1 ring-black/10 w-[min(100%,380px,calc((100dvh_-_var(--recorte-m))*0.5625))] lg:w-[min(100%,380px,calc((100dvh_-_var(--recorte))*0.4615))]"
+      style={{ ["--recorte" as string]: recorte, ["--recorte-m" as string]: recorteMovil }}
     >
-      <div ref={marco} className="relative w-full aspect-[9/16] lg:aspect-[9/19.5] rounded-[1.8rem] overflow-hidden bg-[#0E47D6]">
+      <div ref={marco} className="relative w-full aspect-[9/16] lg:aspect-[9/19.5] rounded-[1.8rem] overflow-hidden" style={{ backgroundColor: fondo }}>
         <div
           ref={scrollRef}
           className="sin-scrollbar absolute left-0 top-0 overflow-y-auto overflow-x-hidden overscroll-contain"
@@ -2174,13 +2146,91 @@ function EditorPunto({
 
 /* ── Ajustes generales ─────────────────────────────────────────────────── */
 
+// Barra fija arriba (no la tapa el distintivo de Netlify): Editar / Vista previa en celular y guardar
+function BarraEdicion({
+  vista,
+  setVista,
+  sinCambios,
+  guardando,
+  onGuardar,
+  onDescartar,
+  bloqueo,
+}: {
+  vista: "editar" | "ver";
+  setVista: (v: "editar" | "ver") => void;
+  sinCambios: boolean;
+  guardando: boolean;
+  onGuardar: () => void;
+  onDescartar: () => void;
+  bloqueo?: string | null; // qué falta para poder guardar
+}) {
+  return (
+    <div className="sticky top-2 z-30 bg-card border border-border rounded-2xl p-1.5 shadow-card space-y-1.5">
+      <div className="lg:hidden grid grid-cols-2 gap-1">
+        {(
+          [
+            ["editar", "Editar", Pencil],
+            ["ver", "Vista previa", Eye],
+          ] as const
+        ).map(([id, texto, Icono]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setVista(id)}
+            aria-pressed={vista === id}
+            className={`h-10 rounded-lg text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${vista === id ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+          >
+            <Icono className="h-4 w-4" /> {texto}
+          </button>
+        ))}
+      </div>
+      <div className={`flex items-center gap-2 rounded-xl pl-3 p-1 ${sinCambios ? "bg-muted/60" : bloqueo ? "bg-destructive/10" : "bg-[#FFF1CC]"}`}>
+        {sinCambios ? (
+          <span className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#14652F]">
+            <Check className="h-4 w-4 shrink-0" /> Todo guardado
+          </span>
+        ) : bloqueo ? (
+          <span className="flex-1 min-w-0 text-sm font-semibold text-destructive truncate">{bloqueo}</span>
+        ) : (
+          <span className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm font-semibold text-[#7A5200]">
+            <span className="h-2 w-2 shrink-0 rounded-full bg-[#D9731B] animate-pulse" />
+            <span className="truncate">
+              <span className="min-[420px]:hidden">Sin guardar</span>
+              <span className="hidden min-[420px]:inline">Cambios sin guardar</span>
+            </span>
+          </span>
+        )}
+        {!sinCambios && (
+          <button type="button" onClick={onDescartar} className="h-10 px-3 rounded-lg text-sm font-semibold text-muted-foreground hover:bg-black/5">
+            Descartar
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onGuardar}
+          disabled={guardando || sinCambios || !!bloqueo}
+          className="h-10 px-4 rounded-lg bg-[#D9731B] text-white font-bold inline-flex items-center gap-2 disabled:opacity-40"
+        >
+          {guardando && <Loader2 className="h-4 w-4 animate-spin" />} Guardar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const SUGERENCIAS_PAGO = ["Efectivo", "Nequi", "Daviplata", "Bancolombia", "Transferencia", "Datáfono", "Bre-B"];
+const NOMBRE_HORA = (h: number) => (h === 0 ? "12 a. m." : `${h} a. m.`);
+
+// Pestaña Ajustes: mismo esquema que Links (pasos numerados + vista previa en vivo + guardar arriba)
 function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
   const [a, setA] = useState<Ajustes>(datos.ajustes);
   const [guardando, setGuardando] = useState(false);
-  useEffect(() => {
-    setA(datos.ajustes);
-  }, [datos.ajustes]);
-  const cambiar = (c: Partial<Ajustes>) => setA({ ...a, ...c });
+  const [vista, setVista] = useState<"editar" | "ver">("editar");
+  const [pantalla, setPantalla] = useState<PantallaAjustes>("portada");
+  const [seleccion, setSeleccion] = useState<PiezaAjustes | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  useEffect(() => setA(datos.ajustes), [datos.ajustes]);
+  const cambiar = (c: Partial<Ajustes>) => setA((x) => ({ ...x, ...c }));
   // medios_pago se mantiene igual a las opciones del dato "Medio de pago" (compatibilidad)
   const pago = a.campos_pedido.find((c) => c.id === "pago" && c.tipo === "opciones");
   const final: Ajustes = { ...a, medios_pago: pago?.opciones?.length ? pago.opciones : a.medios_pago };
@@ -2188,6 +2238,31 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
   const errorFormulario = a.campos_pedido.find(
     (c) => c.activo && (!c.etiqueta.trim() || (c.tipo === "opciones" && !(c.opciones ?? []).length)),
   );
+  const bloqueo = errorFormulario
+    ? !errorFormulario.etiqueta.trim()
+      ? "Falta el nombre de un dato del formulario"
+      : `"${errorFormulario.etiqueta}" necesita al menos una opción`
+    : null;
+
+  const pantallaDe = (p: PiezaAjustes): PantallaAjustes =>
+    p === "saludo" ? "mensaje" : p.startsWith("campo:") ? "formulario" : "portada";
+  const elegir = (p: PiezaAjustes, desdePreview = false) => {
+    setSeleccion(p);
+    setPantalla(pantallaDe(p));
+    if (desdePreview) {
+      setVista("editar");
+      setTimeout(() => document.getElementById(`editor-${p}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 80);
+    } else {
+      setTimeout(() => {
+        const cont = previewRef.current;
+        const el = cont?.querySelector(`[data-pieza="${p}"]`);
+        if (!cont || !el) return;
+        const escala = cont.getBoundingClientRect().height / cont.offsetHeight || 1;
+        const y = (el.getBoundingClientRect().top - cont.getBoundingClientRect().top) / escala + cont.scrollTop;
+        cont.scrollTo({ top: Math.max(0, y - 100), behavior: "smooth" });
+      }, 120);
+    }
+  };
 
   const cambiarRegla = (i: number, r: ReglaHorario | null) => {
     const reglas = [...a.horario_domicilios];
@@ -2195,87 +2270,138 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
     else reglas.splice(i, 1);
     cambiar({ horario_domicilios: reglas });
   };
+  const guardar = async () => {
+    setGuardando(true);
+    await ejecutar(guardarAjustes(clave, final), "Ajustes guardados");
+    setGuardando(false);
+  };
+
+  const PANTALLAS: [PantallaAjustes, string][] = [
+    ["portada", "Portada"],
+    ["formulario", "Formulario"],
+    ["mensaje", "Mensaje"],
+  ];
 
   return (
-    <form
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setGuardando(true);
-        await ejecutar(guardarAjustes(clave, final), "Ajustes guardados");
-        setGuardando(false);
-      }}
-      className="space-y-4"
-    >
-      <Tarjeta titulo="Portada del catálogo">
-        <Campo etiqueta="Título">
-          <input className={INPUT} value={a.titulo} onChange={(e) => cambiar({ titulo: e.target.value })} maxLength={80} />
-        </Campo>
-        <Campo etiqueta="Subtítulo">
-          <input className={INPUT} value={a.subtitulo} onChange={(e) => cambiar({ subtitulo: e.target.value })} maxLength={140} />
-        </Campo>
-        <Campo etiqueta="Instagram (sin @)" ayuda="Aparece en el pie del catálogo y en /links.">
-          <input className={INPUT} value={a.instagram} onChange={(e) => cambiar({ instagram: e.target.value.replace(/^@/, "").trim() })} />
-        </Campo>
-      </Tarjeta>
-
-      <EditorFormularioPedido
-        saludo={a.saludo_pedido}
-        campos={a.campos_pedido}
-        onCambiar={(c) => cambiar(c)}
+    <div className="lg:w-[min(72rem,calc(100vw-3rem))] lg:relative lg:left-1/2 lg:-translate-x-1/2 space-y-4">
+      <BarraEdicion
+        vista={vista}
+        setVista={setVista}
+        sinCambios={sinCambios}
+        guardando={guardando}
+        onGuardar={guardar}
+        onDescartar={() => setA(datos.ajustes)}
+        bloqueo={bloqueo}
       />
 
-      <Tarjeta titulo="Horario de domicilios" icono={<Clock className="h-4 w-4" />}>
-        <p className="text-xs text-muted-foreground">
-          Fuera de este horario el catálogo avisa solo que los domicilios están cerrados y cuándo abren. Los festivos de
-          Colombia se calculan automáticamente y usan el horario del domingo.
-        </p>
-        {a.horario_domicilios.map((r, i) => (
-          <EditorRegla key={i} regla={r} onCambiar={(nr) => cambiarRegla(i, nr)} />
-        ))}
-        <button
-          type="button"
-          onClick={() => cambiar({ horario_domicilios: [...a.horario_domicilios, { dias: [], franjas: [["08:00", "17:00"]] }] })}
-          className="w-full h-10 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground font-semibold"
-        >
-          + Agregar días con otro horario
-        </button>
-      </Tarjeta>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6 lg:items-start">
+        <div className={`space-y-4 min-w-0 ${vista === "ver" ? "hidden lg:block" : ""}`}>
+          <SeccionLinks numero={1} titulo="Portada del catálogo" detalle="Lo primero que ve el cliente" activa={seleccion === "titulo" || seleccion === "subtitulo"} onTocar={() => elegir("titulo")}>
+            <div id="editor-titulo">
+              <Campo etiqueta="Título">
+                <input className={INPUT} value={a.titulo} onFocus={() => elegir("titulo")} onChange={(e) => cambiar({ titulo: e.target.value })} maxLength={80} />
+              </Campo>
+            </div>
+            <div id="editor-subtitulo">
+              <Campo etiqueta="Subtítulo">
+                <input className={INPUT} value={a.subtitulo} onFocus={() => elegir("subtitulo")} onChange={(e) => cambiar({ subtitulo: e.target.value })} maxLength={140} />
+              </Campo>
+            </div>
+            <Campo etiqueta="Instagram" ayuda="Aparece en el pie del catálogo y en /links.">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">@</span>
+                <input className={`${INPUT} pl-8`} value={a.instagram} onChange={(e) => cambiar({ instagram: e.target.value.replace(/^@/, "").trim() })} />
+              </div>
+            </Campo>
+          </SeccionLinks>
 
-      <Tarjeta titulo="Reinicio diario de agotados" icono={<Clock className="h-4 w-4" />}>
-        <p className="text-xs text-muted-foreground">
-          A esta hora (Colombia) todo lo marcado como "Se acabó hoy" vuelve a estar disponible. Ponla antes de abrir.
-        </p>
-        <select className={INPUT} value={a.hora_reinicio} onChange={(e) => cambiar({ hora_reinicio: Number(e.target.value) })}>
-          {Array.from({ length: 12 }, (_, h) => (
-            <option key={h} value={h}>
-              {h === 0 ? "12:00 a. m. (medianoche)" : `${h}:00 a. m.`}
-            </option>
-          ))}
-        </select>
-      </Tarjeta>
+          <SeccionLinks numero={2} titulo="Formulario del pedido" detalle="Lo que llena el cliente y cómo te llega por WhatsApp">
+            <div id="editor-saludo" className={`rounded-2xl border-2 p-3 ${seleccion === "saludo" ? "border-primary" : "border-border"}`}>
+              <Campo etiqueta="Saludo del mensaje" ayuda="Primera línea del mensaje que te llega.">
+                <input className={INPUT} value={a.saludo_pedido} onFocus={() => elegir("saludo")} onChange={(e) => cambiar({ saludo_pedido: e.target.value })} maxLength={120} />
+              </Campo>
+            </div>
+            <EditorFormularioPedido
+              campos={a.campos_pedido}
+              seleccion={seleccion}
+              onElegir={(id) => elegir(`campo:${id}`)}
+              onCambiar={(c) => cambiar(c)}
+            />
+          </SeccionLinks>
 
-      <div className="sticky bottom-[4.5rem] z-10">
-        <button
-          type="submit"
-          disabled={guardando || sinCambios || !!errorFormulario}
-          className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-bold shadow-card disabled:opacity-40 flex items-center justify-center gap-2"
-        >
-          {guardando && <Loader2 className="h-5 w-5 animate-spin" />} {sinCambios ? "Sin cambios" : "Guardar ajustes"}
-        </button>
+          <SeccionLinks numero={3} titulo="Horario de domicilios" detalle="Fuera de horario el catálogo avisa solo" activa={seleccion === "horario"} onTocar={() => elegir("horario")}>
+            <p className="text-xs text-muted-foreground">
+              Los festivos de Colombia se calculan solos y usan el horario del domingo.
+            </p>
+            <div id="editor-horario" className="space-y-3">
+              {a.horario_domicilios.map((r, i) => (
+                <EditorRegla key={i} regla={r} onCambiar={(nr) => { cambiarRegla(i, nr); if (seleccion !== "horario") elegir("horario"); }} />
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => cambiar({ horario_domicilios: [...a.horario_domicilios, { dias: [], franjas: [["08:00", "17:00"]] }] })}
+              className="w-full h-11 rounded-xl border-2 border-dashed border-border text-muted-foreground font-semibold inline-flex items-center justify-center gap-2 hover:border-primary hover:text-primary"
+            >
+              <Plus className="h-5 w-5" /> Agregar días con otro horario
+            </button>
+          </SeccionLinks>
+
+          <SeccionLinks numero={4} titulo="Reinicio diario de agotados" detalle={`Todo lo agotado vuelve a estar disponible a las ${NOMBRE_HORA(a.hora_reinicio)}`}>
+            <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Hora de reinicio">
+              {Array.from({ length: 12 }, (_, h) => (
+                <button
+                  key={h}
+                  type="button"
+                  role="radio"
+                  aria-checked={a.hora_reinicio === h}
+                  onClick={() => cambiar({ hora_reinicio: h })}
+                  className={`h-11 rounded-xl border-2 text-sm font-semibold transition ${a.hora_reinicio === h ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}
+                >
+                  {NOMBRE_HORA(h)}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">Hora de Colombia. Ponla antes de abrir.</p>
+          </SeccionLinks>
+        </div>
+
+        <div className={`lg:sticky lg:top-32 ${vista === "editar" ? "hidden lg:block" : ""}`}>
+          <div className="mx-auto mb-3 grid grid-cols-3 gap-1 bg-card border border-border rounded-xl p-1 max-w-[380px]">
+            {PANTALLAS.map(([id, texto]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPantalla(id)}
+                aria-pressed={pantalla === id}
+                className={`h-9 rounded-lg text-sm font-semibold ${pantalla === id ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+              >
+                {texto}
+              </button>
+            ))}
+          </div>
+          <PantallaCelular scrollRef={previewRef} fondo={pantalla === "mensaje" ? "#075E54" : pantalla === "formulario" ? "#3a3a3a" : "#0E47D6"} recorte="13rem" recorteMovil="13rem">
+            <AjustesVista ajustes={final} pantalla={pantalla} seleccion={seleccion} onElegir={(p) => elegir(p, true)} />
+          </PantallaCelular>
+          <p className="mt-2 text-center text-xs text-muted-foreground">Toca algo de la vista previa para editarlo.</p>
+        </div>
       </div>
-    </form>
+    </div>
   );
 }
 
 function EditorFormularioPedido({
-  saludo,
   campos,
+  seleccion,
+  onElegir,
   onCambiar,
 }: {
-  saludo: string;
   campos: CampoPedido[];
+  seleccion: PiezaAjustes | null;
+  onElegir: (id: string) => void;
   onCambiar: (c: Partial<Ajustes>) => void;
 }) {
+  const [porQuitar, setPorQuitar] = useState<string | null>(null);
   const poner = (i: number, c: Partial<CampoPedido> | null) => {
     const lista = [...campos];
     if (c) lista[i] = { ...lista[i], ...c };
@@ -2290,118 +2416,204 @@ function EditorFormularioPedido({
     onCambiar({ campos_pedido: lista });
   };
   return (
-    <Tarjeta titulo="Formulario del pedido" icono={<Tag className="h-4 w-4" />}>
-      <p className="text-xs text-muted-foreground">
-        Los datos que llena el cliente antes de enviar el pedido por WhatsApp, en este orden. Así llegan en el mensaje.
-      </p>
-      <Campo etiqueta="Saludo del mensaje">
-        <input className={INPUT} value={saludo} onChange={(e) => onCambiar({ saludo_pedido: e.target.value })} maxLength={120} />
-      </Campo>
+    <div className="space-y-2">
+      <p className="text-sm font-semibold">Datos que pide, en este orden</p>
       <ul className="space-y-2">
-        {campos.map((c, i) => (
-          <li key={c.id} className={`rounded-xl border border-border p-3 space-y-2 ${c.activo ? "" : "opacity-60"}`}>
-            {c.tipo === "pedido" ? (
-              <div className="flex items-center gap-2">
-                <span className="flex-1 text-sm">
-                  <strong>{c.etiqueta}</strong>
-                  <span className="block text-xs text-muted-foreground">Los productos y cantidades. Siempre va en el mensaje.</span>
-                </span>
-                <BotonesOrden i={i} total={campos.length} onMover={mover} />
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_12rem] gap-2">
-                  <input
-                    className={`${INPUT} h-10`}
-                    value={c.etiqueta}
-                    onChange={(e) => poner(i, { etiqueta: e.target.value })}
-                    placeholder="Ej: Barrio"
-                    aria-label="Nombre del dato"
-                  />
-                  <select
-                    className={`${INPUT} h-10`}
-                    value={c.tipo}
-                    onChange={(e) => {
-                      const tipo = e.target.value as CampoPedido["tipo"];
-                      poner(i, tipo === "opciones" ? { tipo, opciones: c.opciones?.length ? c.opciones : ["Sí", "No"] } : { tipo });
-                    }}
-                    aria-label="Tipo de dato"
-                  >
-                    {TIPOS_CAMPO.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {c.tipo === "opciones" && (
-                  <OpcionesCampo opciones={c.opciones ?? []} onCambiar={(opciones) => poner(i, { opciones })} />
+        {campos.map((c, i) => {
+          const abierto = seleccion === `campo:${c.id}`;
+          const Icono = ICONOS_TIPO[c.tipo];
+          const falta = c.activo && (!c.etiqueta.trim() || (c.tipo === "opciones" && !(c.opciones ?? []).length));
+          return (
+            <li key={c.id} id={`editor-campo:${c.id}`} className={`rounded-2xl border-2 transition ${abierto ? "border-primary" : falta ? "border-destructive/50" : "border-border"} ${c.activo ? "" : "bg-muted/40"}`}>
+              <div className="flex items-center gap-2 p-2">
+                <button type="button" onClick={() => onElegir(c.id)} className="flex-1 min-w-0 flex items-center gap-3 text-left">
+                  <span className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center ${c.tipo === "pedido" ? "bg-[#D9731B]/15 text-[#9A4708]" : "bg-primary/10 text-primary"} ${c.activo ? "" : "opacity-50"}`}>
+                    <Icono className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-semibold truncate">{c.etiqueta || <span className="text-destructive">Sin nombre</span>}</span>
+                    <span className="block text-xs text-muted-foreground truncate">
+                      {c.tipo === "pedido"
+                        ? "Productos y cantidades · siempre va"
+                        : c.tipo === "opciones"
+                          ? (c.opciones ?? []).join(" · ") || "Sin opciones"
+                          : `${TIPOS_CAMPO.find((t) => t.id === c.tipo)?.nombre ?? ""} · ${c.obligatorio ? "obligatorio" : "opcional"}`}
+                    </span>
+                  </span>
+                </button>
+                {c.tipo !== "pedido" && !abierto && (
+                  <InterruptorCompacto corto activo={c.activo} encendido="Visible" apagado="Oculto" onCambiar={(v) => poner(i, { activo: v })} />
                 )}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => poner(i, { obligatorio: !c.obligatorio })}
-                    className={`h-8 px-3 rounded-full text-xs font-semibold border-2 ${
-                      c.obligatorio ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground"
-                    }`}
-                  >
-                    {c.obligatorio ? "Obligatorio" : "Opcional"}
-                  </button>
-                  <button type="button" onClick={() => poner(i, { activo: !c.activo })} className="h-8 px-2 rounded-lg text-xs font-semibold hover:bg-muted">
-                    {c.activo ? "Ocultar" : "Mostrar"}
-                  </button>
-                  <span className="flex-1" />
-                  <BotonesOrden i={i} total={campos.length} onMover={mover} />
-                  <button type="button" onClick={() => poner(i, null)} aria-label="Quitar dato" className="p-1.5 text-destructive">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                <ChevronDown className={`h-5 w-5 text-muted-foreground shrink-0 transition ${abierto ? "rotate-180" : ""}`} />
+              </div>
+              {abierto && (
+                <div className="border-t border-border p-3 space-y-3">
+                  {c.tipo !== "pedido" && (
+                    <>
+                      <Campo etiqueta="Nombre del dato" ayuda="Así lo ve el cliente y así te llega en el mensaje.">
+                        <input className={INPUT} value={c.etiqueta} autoFocus={!c.etiqueta} onChange={(e) => poner(i, { etiqueta: e.target.value })} placeholder="Ej: Notas del pedido" maxLength={50} />
+                      </Campo>
+                      <div className="space-y-1.5">
+                        <span className="text-sm font-semibold">Tipo de respuesta</span>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                          {TIPOS_CAMPO.map((t) => {
+                            const I = ICONOS_TIPO[t.id];
+                            const activo = c.tipo === t.id;
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                aria-pressed={activo}
+                                onClick={() => poner(i, t.id === "opciones" ? { tipo: t.id, opciones: c.opciones?.length ? c.opciones : ["Sí", "No"] } : { tipo: t.id })}
+                                className={`rounded-xl border-2 py-2 px-1 flex flex-col items-center gap-1 text-[11px] font-semibold leading-tight text-center ${activo ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground"}`}
+                              >
+                                <I className="h-5 w-5" />
+                                {t.id === "barrio" ? "Barrio" : t.id === "opciones" ? "Elegir opción" : t.nombre}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {c.tipo === "opciones" && (
+                        <OpcionesCampo
+                          opciones={c.opciones ?? []}
+                          sugerencias={/pago/i.test(c.etiqueta) || c.id === "pago" ? SUGERENCIAS_PAGO : []}
+                          onCambiar={(opciones) => poner(i, { opciones })}
+                        />
+                      )}
+                      <Interruptor
+                        activo={c.obligatorio}
+                        onCambiar={(v) => poner(i, { obligatorio: v })}
+                        titulo="Obligatorio"
+                        detalle={c.obligatorio ? "No se puede enviar el pedido sin este dato." : "El cliente puede dejarlo vacío."}
+                      />
+                      <Interruptor activo={c.activo} onCambiar={(v) => poner(i, { activo: v })} titulo="Visible en el formulario" />
+                    </>
+                  )}
+                  {porQuitar === c.id ? (
+                    <div role="alert" className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 flex items-center gap-2">
+                      <span className="flex-1 text-sm font-semibold text-destructive">¿Quitar este dato?</span>
+                      <button type="button" onClick={() => setPorQuitar(null)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-muted-foreground">
+                        No
+                      </button>
+                      <button type="button" onClick={() => { poner(i, null); setPorQuitar(null); }} className="h-10 px-3 rounded-xl bg-destructive text-white font-bold">
+                        Sí, quitar
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} aria-label="Subir" className="h-10 w-10 rounded-xl border-2 border-border flex items-center justify-center disabled:opacity-25">
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => mover(i, 1)} disabled={i === campos.length - 1} aria-label="Bajar" className="h-10 w-10 rounded-xl border-2 border-border flex items-center justify-center disabled:opacity-25">
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                      <span className="flex-1" />
+                      {c.tipo !== "pedido" && (
+                        <button type="button" onClick={() => setPorQuitar(c.id)} className="h-10 px-3 rounded-xl border-2 border-border text-destructive font-semibold inline-flex items-center gap-1.5">
+                          <Trash2 className="h-4 w-4" /> Quitar
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </>
-            )}
-          </li>
-        ))}
+              )}
+            </li>
+          );
+        })}
       </ul>
-      <button
-        type="button"
-        onClick={() =>
-          onCambiar({
-            campos_pedido: [
-              ...campos,
-              { id: uid().slice(0, 6), etiqueta: "", tipo: "texto", obligatorio: false, activo: true },
-            ],
-          })
-        }
-        className="w-full h-10 rounded-xl border-2 border-dashed border-border text-sm text-muted-foreground font-semibold hover:border-primary hover:text-primary"
-      >
-        + Agregar dato
-      </button>
-      <p className="text-xs text-muted-foreground">
-        Ideas: "Barrio", "¿Domicilio o recoger?" (elegir opción), "Notas del pedido" (texto largo, opcional).
-      </p>
-    </Tarjeta>
+      <div className="flex flex-wrap gap-2">
+        {[
+          { etiqueta: "", tipo: "texto" as const, texto: "Dato nuevo" },
+          { etiqueta: "Notas del pedido", tipo: "texto_largo" as const, texto: "Notas" },
+          { etiqueta: "¿Domicilio o recoger?", tipo: "opciones" as const, texto: "¿Domicilio o recoger?", opciones: ["Domicilio", "Recoger en el local"] },
+        ].map((m) => (
+          <button
+            key={m.texto}
+            type="button"
+            onClick={() => {
+              const id = uid().slice(0, 6);
+              onCambiar({
+                campos_pedido: [...campos, { id, etiqueta: m.etiqueta, tipo: m.tipo, obligatorio: false, activo: true, ...(m.opciones ? { opciones: m.opciones } : {}) }],
+              });
+              onElegir(id);
+            }}
+            className="h-10 px-3 rounded-xl border-2 border-dashed border-border text-sm font-semibold text-muted-foreground inline-flex items-center gap-1.5 hover:border-primary hover:text-primary"
+          >
+            <Plus className="h-4 w-4" /> {m.texto}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
-// Opciones separadas por coma; se guarda el texto tal cual se escribe para no estorbar al teclear
-function OpcionesCampo({ opciones, onCambiar }: { opciones: string[]; onCambiar: (o: string[]) => void }) {
-  const [texto, setTexto] = useState(opciones.join(", "));
-  useEffect(() => {
-    const actual = texto.split(",").map((x) => x.trim()).filter(Boolean);
-    if (JSON.stringify(actual) !== JSON.stringify(opciones)) setTexto(opciones.join(", "));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opciones]);
+// Opciones como fichas: tocar una la deja marcada por defecto (primera), × la quita,
+// y se agregan escribiendo o tocando una sugerencia
+function OpcionesCampo({ opciones, sugerencias = [], onCambiar }: { opciones: string[]; sugerencias?: string[]; onCambiar: (o: string[]) => void }) {
+  const [nueva, setNueva] = useState("");
+  const agregar = (texto: string) => {
+    const nuevas = texto
+      .split(",")
+      .map((x) => x.trim())
+      .filter((x) => x && !opciones.some((o) => o.toLowerCase() === x.toLowerCase()));
+    if (nuevas.length) onCambiar([...opciones, ...nuevas]);
+    setNueva("");
+  };
+  const libres = sugerencias.filter((x) => !opciones.some((o) => o.toLowerCase() === x.toLowerCase()));
   return (
-    <div>
-      <input
-        className={`${INPUT} h-10`}
-        value={texto}
-        onChange={(e) => {
-          setTexto(e.target.value);
-          onCambiar(e.target.value.split(",").map((x) => x.trim()).filter(Boolean));
-        }}
-        aria-label="Opciones"
-      />
-      <p className="mt-1 text-xs text-muted-foreground">Opciones separadas por coma. La primera queda marcada.</p>
+    <div className="space-y-2">
+      <span className="text-sm font-semibold">Opciones</span>
+      <div className="flex flex-wrap gap-2">
+        {opciones.map((o, k) => (
+          <span
+            key={o}
+            className={`inline-flex items-center rounded-full border-2 text-sm font-semibold ${k === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}
+          >
+            <button
+              type="button"
+              onClick={() => onCambiar([o, ...opciones.filter((x) => x !== o)])}
+              title={k === 0 ? "Marcada por defecto" : "Dejar marcada por defecto"}
+              className="h-9 pl-3 pr-1 inline-flex items-center gap-1"
+            >
+              {k === 0 && <Check className="h-4 w-4" />}
+              {o}
+            </button>
+            <button type="button" onClick={() => onCambiar(opciones.filter((x) => x !== o))} aria-label={`Quitar ${o}`} className="h-9 w-8 inline-flex items-center justify-center opacity-70 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+          </span>
+        ))}
+        {!opciones.length && <span className="text-sm text-destructive">Agrega al menos una opción.</span>}
+      </div>
+      <div className="flex gap-2">
+        <input
+          className={INPUT}
+          value={nueva}
+          onChange={(e) => setNueva(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              agregar(nueva);
+            }
+          }}
+          placeholder="Escribe una opción"
+          aria-label="Nueva opción"
+        />
+        <button type="button" onClick={() => agregar(nueva)} disabled={!nueva.trim()} className="shrink-0 h-11 px-4 rounded-xl bg-primary text-primary-foreground font-bold disabled:opacity-40">
+          Agregar
+        </button>
+      </div>
+      {libres.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {libres.map((x) => (
+            <button key={x} type="button" onClick={() => agregar(x)} className="h-8 px-3 rounded-full border-2 border-dashed border-border text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary">
+              + {x}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-muted-foreground">La primera queda marcada por defecto: toca otra para cambiarla.</p>
     </div>
   );
 }
