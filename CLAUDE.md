@@ -38,3 +38,4 @@ Antes de dar algo por terminado, revisar:
   `scripts/prueba-sql/probar.sh` y agregar sus casos a `scripts/prueba-sql/funciones.sql`.
 - Revisión visual: `scripts/capturas.cjs` (datos de prueba, sin Supabase); corre solo en cada PR.
 - Guía del día a día para el negocio: `OPERACION.md`.
+- Estado y pendientes al cierre de cada sesión: `ESTADO.md` (leer primero en un chat nuevo). IA de WhatsApp: `APEX.md`.
