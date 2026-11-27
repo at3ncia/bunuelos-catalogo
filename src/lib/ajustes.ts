@@ -63,9 +63,25 @@ export type Ajustes = {
   instagram: string;
   boton_menu: string;
   medios_pago: string[];
-  hora_reinicio: number;
+  hora_reinicio: number; // hora en que vuelven los agotados (la usa la base de datos)
+  reinicio_auto: boolean; // true = 1 hora antes de la primera apertura del horario
   horario_domicilios: ReglaHorario[];
+  mensaje_cierre: string; // línea final del mensaje de WhatsApp ("" = sin cierre)
+  mensaje_negritas: boolean; // *Etiqueta:* en negrita en WhatsApp
+  mensaje_compacto: boolean; // un salto de línea entre datos (no dos)
 };
+
+export type FormatoMensaje = Pick<Ajustes, "mensaje_cierre" | "mensaje_negritas" | "mensaje_compacto">;
+
+// Reinicio automático: 1 hora antes de la primera apertura de la semana (entre 12 a. m. y 11 a. m.),
+// así los agotados de ayer nunca se ven al abrir aunque cambie el horario.
+export function horaReinicioAuto(reglas: ReglaHorario[]) {
+  const aperturas = reglas.filter((r) => r.dias.length).flatMap((r) => r.franjas.map(([d]) => aMin(d)));
+  if (!aperturas.length) return 4;
+  return Math.min(11, Math.max(0, Math.floor(Math.min(...aperturas) / 60) - 1));
+}
+export const horaReinicio = (a: Pick<Ajustes, "reinicio_auto" | "hora_reinicio" | "horario_domicilios">) =>
+  a.reinicio_auto ? horaReinicioAuto(a.horario_domicilios) : a.hora_reinicio;
 
 export const AJUSTES_POR_DEFECTO: Ajustes = {
   saludo_pedido: "Hola! quisiera hacer un pedido:",
@@ -79,6 +95,10 @@ export const AJUSTES_POR_DEFECTO: Ajustes = {
   boton_menu: "Menú domicilios",
   medios_pago: ["Efectivo", "Nequi", "Bancolombia", "Otro"],
   hora_reinicio: 4,
+  reinicio_auto: true,
+  mensaje_cierre: "",
+  mensaje_negritas: true,
+  mensaje_compacto: true,
   horario_domicilios: [
     { dias: [1, 2, 3, 4, 5, 6], franjas: [["06:00", "13:00"], ["14:00", "19:00"]] },
     { dias: [0], franjas: [["06:00", "13:00"]] },
@@ -138,7 +158,11 @@ export function normalizarAjustes(raw: unknown): Ajustes {
     boton_menu: typeof a.boton_menu === "string" && a.boton_menu.trim() ? a.boton_menu : d.boton_menu,
     medios_pago: mediosPago,
     hora_reinicio: Number.isInteger(a.hora_reinicio) ? (a.hora_reinicio as number) : d.hora_reinicio,
+    reinicio_auto: typeof a.reinicio_auto === "boolean" ? a.reinicio_auto : d.reinicio_auto,
     horario_domicilios: Array.isArray(a.horario_domicilios) ? a.horario_domicilios : d.horario_domicilios,
+    mensaje_cierre: typeof a.mensaje_cierre === "string" ? a.mensaje_cierre : d.mensaje_cierre,
+    mensaje_negritas: typeof a.mensaje_negritas === "boolean" ? a.mensaje_negritas : d.mensaje_negritas,
+    mensaje_compacto: typeof a.mensaje_compacto === "boolean" ? a.mensaje_compacto : d.mensaje_compacto,
   };
 }
 
@@ -292,8 +316,8 @@ export function urlEnlace(e: Pick<Enlace, "url" | "icono">) {
   return /^(https?:|tel:|mailto:)/i.test(u) ? u : `https://${u}`;
 }
 
-// Mensaje de WhatsApp con el mismo formato de siempre:
-// saludo, "- Etiqueta: valor" por cada dato (el detalle del pedido en su lugar) y el total.
+// Mensaje de WhatsApp: saludo, código, "Etiqueta: valor" por cada dato (el detalle del pedido
+// en su lugar), domicilio, total y cierre. Formato: negritas de WhatsApp (*texto*) y compacto opcionales.
 export function mensajePedido(
   saludo: string,
   campos: CampoPedido[],
@@ -301,14 +325,23 @@ export function mensajePedido(
   detalle: string,
   total: string,
   extra: { codigo?: string; domicilio?: string } = {},
+  formato: Partial<FormatoMensaje> = {},
 ) {
+  const b = (t: string) => (formato.mensaje_negritas ? `*${t}*` : t);
+  const et = (t: string) => (formato.mensaje_negritas ? `*${t}:*` : `- ${t}:`);
   const partes = [saludo];
-  if (extra.codigo) partes.push(`Pedido #${extra.codigo}`);
+  if (extra.codigo) partes.push(b(`Pedido #${extra.codigo}`));
   for (const c of campos.filter((c) => c.activo)) {
-    if (c.tipo === "pedido") partes.push(`- ${c.etiqueta}:\n${detalle}`);
-    else if ((valores[c.id] ?? "").trim()) partes.push(`- ${c.etiqueta}: ${valores[c.id].trim()}`);
+    if (c.tipo === "pedido") partes.push(`${et(c.etiqueta)}\n${detalle}`);
+    else if ((valores[c.id] ?? "").trim()) partes.push(`${et(c.etiqueta)} ${valores[c.id].trim()}`);
   }
-  if (extra.domicilio) partes.push(`Domicilio: ${extra.domicilio}`);
-  partes.push(`Total: ${total}`);
-  return partes.join("\n\n");
+  if (extra.domicilio) partes.push(`${formato.mensaje_negritas ? "*Domicilio:*" : "Domicilio:"} ${extra.domicilio}`);
+  partes.push(b(`Total: ${total}`));
+  if (formato.mensaje_cierre?.trim()) partes.push(formato.mensaje_cierre.trim());
+  if (!formato.mensaje_compacto) return partes.join("\n\n");
+  // Compacto: saludo y bloque de datos separados; datos uno por línea; total y cierre aparte
+  const [primero, ...resto] = partes;
+  const cierre = formato.mensaje_cierre?.trim() ? resto.pop() : undefined;
+  const tot = resto.pop();
+  return [primero, resto.join("\n"), tot, cierre].filter(Boolean).join("\n\n");
 }

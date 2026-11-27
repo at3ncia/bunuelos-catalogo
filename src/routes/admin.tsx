@@ -37,6 +37,8 @@ import {
   etiquetaDias,
   etiquetaFranjas,
   ICONOS_ENLACE,
+  horaReinicio,
+  horaReinicioAuto,
   NOMBRES_DIA,
   TIPOS_CAMPO,
   urlEnlace,
@@ -53,6 +55,8 @@ import {
   cambiarClaveAdmin,
   cargarDatosPanel,
   guardarAjustes,
+  reiniciarAgotados,
+  contarAgotados,
   guardarCategoria,
   guardarProducto,
   guardarPunto,
@@ -2233,8 +2237,33 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
   const cambiar = (c: Partial<Ajustes>) => setA((x) => ({ ...x, ...c }));
   // medios_pago se mantiene igual a las opciones del dato "Medio de pago" (compatibilidad)
   const pago = a.campos_pedido.find((c) => c.id === "pago" && c.tipo === "opciones");
-  const final: Ajustes = { ...a, medios_pago: pago?.opciones?.length ? pago.opciones : a.medios_pago };
-  const sinCambios = JSON.stringify(final) === JSON.stringify(datos.ajustes);
+  const final: Ajustes = {
+    ...a,
+    medios_pago: pago?.opciones?.length ? pago.opciones : a.medios_pago,
+    hora_reinicio: horaReinicio(a), // la base de datos usa esta hora; en automático sale del horario
+  };
+  // Se compara contra lo guardado con la hora ya calculada (si no, el automático parecería un cambio)
+  const base = { ...datos.ajustes, hora_reinicio: horaReinicio(datos.ajustes) };
+  const sinCambios = JSON.stringify(final) === JSON.stringify(base);
+  const horaPendiente = datos.ajustes.hora_reinicio !== horaReinicio(datos.ajustes); // falta guardar una vez
+  const [agotados, setAgotados] = useState<Record<number, number> | null>(null);
+  const [confirmarReinicio, setConfirmarReinicio] = useState(false);
+  const [reiniciando, setReiniciando] = useState(false);
+  useEffect(() => {
+    contarAgotados().then(setAgotados);
+  }, []);
+  const totalAgotados = agotados ? Object.values(agotados).reduce((x, y) => x + y, 0) : 0;
+  const reiniciar = async () => {
+    setReiniciando(true);
+    const r = await reiniciarAgotados(clave);
+    const ok = await ejecutar(
+      Promise.resolve(r.ok ? r : { ok: false, error: /does not exist|could not find/i.test(r.error ?? "") ? "Falta ejecutar sql/013_reiniciar_agotados.sql en Supabase" : r.error }),
+      "Todo volvió a estar disponible",
+    );
+    setReiniciando(false);
+    setConfirmarReinicio(false);
+    if (ok) setAgotados({});
+  };
   const errorFormulario = a.campos_pedido.find(
     (c) => c.activo && (!c.etiqueta.trim() || (c.tipo === "opciones" && !(c.opciones ?? []).length)),
   );
@@ -2245,7 +2274,7 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
     : null;
 
   const pantallaDe = (p: PiezaAjustes): PantallaAjustes =>
-    p === "saludo" ? "mensaje" : p.startsWith("campo:") ? "formulario" : "portada";
+    p === "saludo" || p === "cierre" ? "mensaje" : p.startsWith("campo:") ? "formulario" : "portada";
   const elegir = (p: PiezaAjustes, desdePreview = false) => {
     setSeleccion(p);
     setPantalla(pantallaDe(p));
@@ -2315,12 +2344,7 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
             </Campo>
           </SeccionLinks>
 
-          <SeccionLinks numero={2} titulo="Formulario del pedido" detalle="Lo que llena el cliente y cómo te llega por WhatsApp">
-            <div id="editor-saludo" className={`rounded-2xl border-2 p-3 ${seleccion === "saludo" ? "border-primary" : "border-border"}`}>
-              <Campo etiqueta="Saludo del mensaje" ayuda="Primera línea del mensaje que te llega.">
-                <input className={INPUT} value={a.saludo_pedido} onFocus={() => elegir("saludo")} onChange={(e) => cambiar({ saludo_pedido: e.target.value })} maxLength={120} />
-              </Campo>
-            </div>
+          <SeccionLinks numero={2} titulo="Formulario del pedido" detalle="Lo que llena el cliente antes de enviar">
             <EditorFormularioPedido
               campos={a.campos_pedido}
               seleccion={seleccion}
@@ -2329,7 +2353,62 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
             />
           </SeccionLinks>
 
-          <SeccionLinks numero={3} titulo="Horario de domicilios" detalle="Fuera de horario el catálogo avisa solo" activa={seleccion === "horario"} onTocar={() => elegir("horario")}>
+          <SeccionLinks numero={3} titulo="Mensaje de WhatsApp" detalle="Cómo te llega cada pedido" activa={seleccion === "saludo" || seleccion === "cierre"} onTocar={() => elegir("saludo")}>
+            <div id="editor-saludo">
+              <Campo etiqueta="Saludo" ayuda="Primera línea del mensaje.">
+                <input className={INPUT} value={a.saludo_pedido} onFocus={() => elegir("saludo")} onChange={(e) => cambiar({ saludo_pedido: e.target.value })} maxLength={120} />
+              </Campo>
+            </div>
+            <div id="editor-cierre" className="space-y-2">
+              <Campo etiqueta="Cierre (opcional)" ayuda="Última línea, después del total.">
+                <input
+                  className={INPUT}
+                  value={a.mensaje_cierre}
+                  onFocus={() => elegir("cierre")}
+                  onChange={(e) => cambiar({ mensaje_cierre: e.target.value })}
+                  placeholder="Gracias 🧡 quedo atento a la confirmación"
+                  maxLength={120}
+                />
+              </Campo>
+              {!a.mensaje_cierre && (
+                <div className="flex flex-wrap gap-2">
+                  {["Gracias 🧡 quedo atento a la confirmación", "¿Me confirmas el valor del domicilio? 🙏"].map((x) => (
+                    <button
+                      key={x}
+                      type="button"
+                      onClick={() => {
+                        cambiar({ mensaje_cierre: x });
+                        elegir("cierre");
+                      }}
+                      className="h-8 px-3 rounded-full border-2 border-dashed border-border text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                    >
+                      + {x}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Interruptor
+              activo={a.mensaje_negritas}
+              onCambiar={(v) => {
+                cambiar({ mensaje_negritas: v });
+                elegir("saludo");
+              }}
+              titulo="Nombres de los datos en negrita"
+              detalle="Llega «Nombre: María» con «Nombre:» resaltado. Más fácil de leer."
+            />
+            <Interruptor
+              activo={a.mensaje_compacto}
+              onCambiar={(v) => {
+                cambiar({ mensaje_compacto: v });
+                elegir("saludo");
+              }}
+              titulo="Mensaje compacto"
+              detalle="Un dato por línea, sin espacios de más. El mensaje queda más corto."
+            />
+          </SeccionLinks>
+
+          <SeccionLinks numero={4} titulo="Horario de domicilios" detalle="Fuera de horario el catálogo avisa solo" activa={seleccion === "horario"} onTocar={() => elegir("horario")}>
             <p className="text-xs text-muted-foreground">
               Los festivos de Colombia se calculan solos y usan el horario del domingo.
             </p>
@@ -2347,22 +2426,99 @@ function PestanaAjustes({ datos, clave, ejecutar }: PropsPestana) {
             </button>
           </SeccionLinks>
 
-          <SeccionLinks numero={4} titulo="Reinicio diario de agotados" detalle={`Todo lo agotado vuelve a estar disponible a las ${NOMBRE_HORA(a.hora_reinicio)}`}>
-            <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Hora de reinicio">
-              {Array.from({ length: 12 }, (_, h) => (
-                <button
-                  key={h}
-                  type="button"
-                  role="radio"
-                  aria-checked={a.hora_reinicio === h}
-                  onClick={() => cambiar({ hora_reinicio: h })}
-                  className={`h-11 rounded-xl border-2 text-sm font-semibold transition ${a.hora_reinicio === h ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}
-                >
-                  {NOMBRE_HORA(h)}
+          <SeccionLinks numero={5} titulo="Agotados" detalle={`Lo marcado como "Se acabó hoy" vuelve solo a las ${NOMBRE_HORA(horaReinicio(a))}`}>
+            <div className={`rounded-2xl p-3 flex items-center gap-3 ${totalAgotados ? "bg-[#FFF1CC]" : "bg-[#DDF5E4]"}`}>
+              <span className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center font-display font-bold text-lg ${totalAgotados ? "bg-[#D9731B] text-white" : "bg-[#1F9D4C] text-white"}`}>
+                {agotados === null ? "–" : totalAgotados}
+              </span>
+              <span className="flex-1 min-w-0 text-sm">
+                <span className={`block font-semibold ${totalAgotados ? "text-[#7A5200]" : "text-[#14652F]"}`}>
+                  {agotados === null
+                    ? "No se pudo consultar ahora"
+                    : totalAgotados
+                      ? `${totalAgotados} producto${totalAgotados === 1 ? "" : "s"} agotado${totalAgotados === 1 ? "" : "s"} hoy`
+                      : "Todo está disponible"}
+                </span>
+                {!!totalAgotados && (
+                  <span className="block text-xs text-muted-foreground">
+                    {datos.sedes
+                      .filter((x) => agotados?.[x.id])
+                      .map((x) => `${x.ciudad}: ${agotados?.[x.id]}`)
+                      .join(" · ")}{" "}
+                    · vuelven a las {NOMBRE_HORA(datos.ajustes.hora_reinicio)}
+                  </span>
+                )}
+              </span>
+              {!!totalAgotados && !confirmarReinicio && (
+                <button type="button" onClick={() => setConfirmarReinicio(true)} className="h-10 px-3 shrink-0 rounded-xl bg-card border-2 border-border text-sm font-semibold text-primary">
+                  Reiniciar ahora
                 </button>
-              ))}
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">Hora de Colombia. Ponla antes de abrir.</p>
+            {confirmarReinicio && (
+              <div role="alert" className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3 flex flex-wrap items-center gap-2">
+                <span className="flex-1 min-w-[12rem] text-sm font-semibold">¿Poner todo como disponible en todas las sedes?</span>
+                <button type="button" onClick={() => setConfirmarReinicio(false)} className="h-10 px-3 rounded-xl border-2 border-border font-semibold text-muted-foreground">
+                  No
+                </button>
+                <button type="button" onClick={reiniciar} disabled={reiniciando} className="h-10 px-3 rounded-xl bg-primary text-primary-foreground font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                  {reiniciando && <Loader2 className="h-4 w-4 animate-spin" />} Sí, reiniciar
+                </button>
+              </div>
+            )}
+
+            {horaPendiente && sinCambios && (
+              <div className="rounded-xl bg-[#FFF1CC] p-3 flex items-center gap-2 text-sm text-[#7A5200]">
+                <span className="flex-1">
+                  Todavía vuelven a las {NOMBRE_HORA(datos.ajustes.hora_reinicio)} · toca Aplicar para usar la hora automática ({NOMBRE_HORA(horaReinicio(datos.ajustes))})
+                </span>
+                <button type="button" onClick={guardar} disabled={guardando} className="h-10 px-3 shrink-0 rounded-xl bg-[#D9731B] text-white font-bold disabled:opacity-50">
+                  Aplicar
+                </button>
+              </div>
+            )}
+            <div className="space-y-2" role="radiogroup" aria-label="Cuándo vuelven los agotados">
+              {[
+                { auto: true, titulo: "Automático (recomendado)", detalle: `1 hora antes de abrir según tu horario (hoy: ${NOMBRE_HORA(horaReinicioAuto(a.horario_domicilios))}). Si cambias el horario, se ajusta solo.` },
+                { auto: false, titulo: "Hora fija", detalle: "Tú eliges la hora." },
+              ].map((o) => {
+                const activo = a.reinicio_auto === o.auto;
+                return (
+                  <button
+                    key={o.titulo}
+                    type="button"
+                    role="radio"
+                    aria-checked={activo}
+                    onClick={() => cambiar({ reinicio_auto: o.auto, ...(o.auto ? {} : { hora_reinicio: horaReinicio(a) }) })}
+                    className={`w-full flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition ${activo ? "border-primary bg-primary/5" : "border-border"}`}
+                  >
+                    <span className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center ${activo ? "border-primary" : "border-muted-foreground/40"}`}>
+                      {activo && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold">{o.titulo}</span>
+                      <span className="block text-xs text-muted-foreground">{o.detalle}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {!a.reinicio_auto && (
+              <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Hora de reinicio">
+                {Array.from({ length: 12 }, (_, h) => (
+                  <button
+                    key={h}
+                    type="button"
+                    role="radio"
+                    aria-checked={a.hora_reinicio === h}
+                    onClick={() => cambiar({ hora_reinicio: h })}
+                    className={`h-11 rounded-xl border-2 text-sm font-semibold transition ${a.hora_reinicio === h ? "border-primary bg-primary text-primary-foreground" : "border-border"}`}
+                  >
+                    {NOMBRE_HORA(h)}
+                  </button>
+                ))}
+              </div>
+            )}
           </SeccionLinks>
         </div>
 

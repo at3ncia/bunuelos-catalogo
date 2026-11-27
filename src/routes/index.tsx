@@ -8,7 +8,7 @@ import { useCart, formatCOP } from "@/lib/cart";
 import type { Product } from "@/lib/storage";
 import { LOGO_URL, LOGO_OSCURO_URL, MASCOTA_URL, AZUL_MARCA, FONDO_MANCHAS } from "@/lib/brand";
 import { FotoProducto, colorCategoria, textoSobre } from "@/components/foto-producto";
-import { estadoDomicilios, etiquetaDias, etiquetaFranjas, mensajePedido, visibleHoy, type CampoPedido } from "@/lib/ajustes";
+import { estadoDomicilios, etiquetaDias, etiquetaFranjas, mensajePedido, visibleHoy, type CampoPedido, type FormatoMensaje } from "@/lib/ajustes";
 import { Clock, RefreshCw } from "lucide-react";
 import {
   Dialog,
@@ -448,6 +448,7 @@ function CatalogPage() {
         lugar={lugarPedido}
         campos={ajustes.campos_pedido}
         saludo={ajustes.saludo_pedido}
+        formato={ajustes}
         barrios={barrios.filter((b) => b.sede_id === sedeId)}
         sedeId={sedeId}
         puntoId={puntoActual?.id ?? null}
@@ -721,6 +722,7 @@ function CheckoutModal({
   lugar,
   campos,
   saludo,
+  formato,
   barrios,
   sedeId,
   puntoId,
@@ -734,6 +736,7 @@ function CheckoutModal({
   lugar: string;
   campos: CampoPedido[];
   saludo: string;
+  formato: FormatoMensaje;
   barrios: Barrio[];
   sedeId: number | null;
   puntoId: string | null;
@@ -807,7 +810,7 @@ function CheckoutModal({
     const msg = mensajePedido(saludo, campos, legibles, detalle, formatCOP(total), {
       codigo: registro?.codigo,
       domicilio: campoBarrio && hayBarrio ? "por confirmar" : undefined,
-    });
+    }, formato);
     const url = `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
     // Recordar para el próximo pedido (solo en este celular)
     guardarLocal(DATOS_CLIENTE, valores);

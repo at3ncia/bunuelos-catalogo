@@ -25,7 +25,8 @@ Guía para el día a día. Casi todo se cambia desde la web, sin tocar código n
 - **Ajustes:** título y subtítulo de la portada e Instagram.
 - **Ajustes** (con vista previa en vivo de la portada, el formulario y el mensaje que llega por WhatsApp): portada, **formulario del pedido** (qué datos llena el cliente, en qué orden, obligatorios, tipo de respuesta y opciones como fichas: tocar una la deja marcada por defecto, con sugerencias de medios de pago), saludo del mensaje, horario y hora de reinicio.
 - **Horario de domicilios:** días y franjas. Fuera de horario, el catálogo avisa solo cuándo abren. Los **festivos de Colombia se calculan automáticamente** (usan el horario del domingo).
-- **Reinicio diario:** la hora en que todo lo marcado como "Se acabó hoy" vuelve a estar disponible.
+- **Reinicio diario:** por defecto **automático, 1 hora antes de la primera apertura del horario** (si cambias el horario, se ajusta solo); o una hora fija. Se ve cuántos productos están agotados por sede y hay un botón **Reiniciar ahora**.
+- **Mensaje de WhatsApp:** saludo, línea de cierre, etiquetas en negrita y formato compacto (con vista previa del chat).
 - **Claves:** restablecer la clave de una ciudad (cuando cambia el personal) y cambiar la tuya.
 
 ## Automatizaciones que ya funcionan solas
@@ -59,6 +60,7 @@ Ejecutar en **SQL Editor → Run**, en este orden, una sola vez cada uno:
 11. `sql/010_ocultar_precio_domicilio.sql` — el público ya no puede leer el precio del domicilio
 12. `sql/011_pedidos_borrar_y_fechas.sql` — borrar pedidos, limpieza de pendientes de más de 30 días y filtro por fechas
 13. `sql/012_promos_frecuencia.sql` — promos: frecuencia (cada visita / una vez al día / una sola vez) y franja de horas
+14. `sql/013_reiniciar_agotados.sql` — botón "Reiniciar ahora" de agotados en Ajustes
 
 Después del paso 8, define la contraseña del dueño (una sola vez; luego se cambia desde `/admin`):
 
@@ -76,6 +78,8 @@ La tabla `pedidos` ya tiene `pago_proveedor` y `pago_referencia`. Para que un pa
 3. Agregar el botón "Pagar con Bold" en el formulario del pedido usando el código del pedido como referencia.
 
 ## Pendientes
+
+- [ ] **Ejecutar `sql/013_reiniciar_agotados.sql`** en Supabase (sin esto, el botón "Reiniciar ahora" muestra un aviso).
 
 - [ ] **Ejecutar `sql/012_promos_frecuencia.sql`** en Supabase (sin esto, la frecuencia y el horario de las promos no se guardan).
 

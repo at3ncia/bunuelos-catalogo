@@ -8,7 +8,7 @@ import { AZUL_MARCA, FONDO_MANCHAS, LOGO_OSCURO_URL } from "@/lib/brand";
 // que llega por WhatsApp. Se dibuja con los mismos estilos del catálogo.
 
 export type PantallaAjustes = "portada" | "formulario" | "mensaje";
-export type PiezaAjustes = "titulo" | "subtitulo" | "horario" | "saludo" | `campo:${string}`;
+export type PiezaAjustes = "titulo" | "subtitulo" | "horario" | "saludo" | "cierre" | `campo:${string}`;
 
 export const ICONOS_TIPO: Record<TipoCampo, (p: { className?: string }) => React.ReactNode> = {
   texto: (p) => <Type {...p} />,
@@ -181,8 +181,11 @@ function Mensaje({ ajustes, pieza }: { ajustes: Ajustes; pieza: Pieza }) {
   const texto = mensajePedido(ajustes.saludo_pedido, activos, valores, detalle, formatCOP(14000), {
     codigo: "CAR-04821",
     domicilio: hayBarrio ? "por confirmar" : undefined,
-  });
+  }, ajustes);
   const [primera, ...resto] = texto.split("\n\n");
+  // Como WhatsApp: *texto* se ve en negrita
+  const negrita = (t: string) =>
+    t.split(/(\*[^*\n]+\*)/g).map((x, k) => (/^\*[^*\n]+\*$/.test(x) ? <strong key={k}>{x.slice(1, -1)}</strong> : x));
   return (
     <div className="min-h-full flex flex-col bg-[#EFE7DE]">
       <div className="bg-[#075E54] text-white px-3 pt-9 pb-3 flex items-center gap-3">
@@ -196,9 +199,15 @@ function Mensaje({ ajustes, pieza }: { ajustes: Ajustes; pieza: Pieza }) {
       </div>
       <div className="flex-1 p-3">
         <div className="ml-auto max-w-[90%] rounded-xl rounded-tr-sm bg-[#D9FDD3] px-3 py-2 text-[13px] leading-snug text-[#111B21] shadow-sm whitespace-pre-wrap break-words">
-          <span {...pieza("saludo", "block -mx-1 px-1")}>{primera}</span>
-          {"\n\n"}
-          {resto.join("\n\n")}
+          <span {...pieza("saludo", "block -mx-1 px-1")}>{negrita(primera)}</span>
+          {"\n"}
+          {negrita(resto.slice(0, ajustes.mensaje_cierre.trim() ? -1 : undefined).join("\n\n"))}
+          {ajustes.mensaje_cierre.trim() && (
+            <>
+              {"\n\n"}
+              <span {...pieza("cierre", "block -mx-1 px-1")}>{negrita(resto[resto.length - 1])}</span>
+            </>
+          )}
           <span className="block text-right text-[10px] text-[#667781] mt-1">7:05 p. m. ✓✓</span>
         </div>
         <p className="mt-3 text-center text-[11px] text-[#667781]">Datos de ejemplo. El código del pedido se pone solo.</p>
